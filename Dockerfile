@@ -3,8 +3,10 @@ FROM node:20-alpine AS builder
 
 WORKDIR /app
 
-# 安装 pnpm
-RUN npm install -g pnpm@9.1.0
+# 配置国内镜像源并安装 pnpm
+RUN npm config set registry https://registry.npmmirror.com && \
+    npm install -g pnpm@9.1.0 && \
+    pnpm config set registry https://registry.npmmirror.com
 
 # 复制 workspace 配置文件
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml tsconfig.base.json ./
@@ -39,8 +41,10 @@ RUN apk add --no-cache openssl
 
 WORKDIR /app
 
-# 安装 pnpm
-RUN npm install -g pnpm@9.1.0
+# 配置国内镜像源并安装 pnpm
+RUN npm config set registry https://registry.npmmirror.com && \
+    npm install -g pnpm@9.1.0 && \
+    pnpm config set registry https://registry.npmmirror.com
 
 # 复制 workspace 配置文件
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./

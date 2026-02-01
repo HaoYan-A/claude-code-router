@@ -25,7 +25,17 @@ export function createApp(): Express {
   const app = express();
 
   // Security middleware
-  app.use(helmet());
+  app.use(
+    helmet({
+      // 在 HTTP 环境下禁用某些安全头
+      crossOriginOpenerPolicy: false,
+      crossOriginResourcePolicy: false,
+      crossOriginEmbedderPolicy: false,
+      contentSecurityPolicy: false,
+      // 不强制 HTTPS
+      hsts: false,
+    })
+  );
   app.use(cors());
 
   // Request logging

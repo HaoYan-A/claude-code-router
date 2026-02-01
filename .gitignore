@@ -39,3 +39,4 @@ packages/backend/prisma/*.db-journal
 
 # Docker
 .docker/
+.env.production

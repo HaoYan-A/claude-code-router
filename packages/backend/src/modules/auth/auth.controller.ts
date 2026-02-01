@@ -11,9 +11,10 @@ export class AuthController {
 
   async githubAuth(_req: Request, res: Response): Promise<void> {
     const { url, state } = authService.getGitHubAuthUrl();
+    const isHttps = env.FRONTEND_URL.startsWith('https://');
     res.cookie('github_oauth_state', state, {
       httpOnly: true,
-      secure: env.NODE_ENV === 'production',
+      secure: isHttps, // 根据前端 URL 协议判断
       sameSite: 'lax',
       maxAge: 10 * 60 * 1000, // 10 minutes
     });

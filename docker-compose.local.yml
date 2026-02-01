@@ -1,0 +1,26 @@
+version: '3.8'
+
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: ccr-app
+    restart: always
+    ports:
+      - "3010:3000"
+    env_file:
+      - .env.production
+    networks:
+      - app-network
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    deploy:
+      resources:
+        limits:
+          cpus: '2'
+          memory: 1G
+
+networks:
+  app-network:
+    driver: bridge
