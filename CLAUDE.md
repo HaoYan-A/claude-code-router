@@ -120,7 +120,7 @@ User 模型使用 GitHub OAuth 字段：`githubId`, `githubUsername`, `avatarUrl
 
 ## Environment Variables
 
-后端配置示例见 `packages/backend/.env.example`，必须配置：
+后端配置示例见 `.env.docker.example`，必须配置：
 
 ```bash
 # Database
@@ -131,9 +131,11 @@ REDIS_URL=redis://...
 
 # JWT
 JWT_SECRET=your-secret-at-least-32-chars
+JWT_ACCESS_EXPIRES_IN=15m
 
-# Claude API
-CLAUDE_API_KEY=your-claude-api-key
+# Server
+PORT=3000
+NODE_ENV=development
 
 # Admin
 ADMIN_PASSWORD=admin123
@@ -143,4 +145,8 @@ GITHUB_CLIENT_ID=your-client-id
 GITHUB_CLIENT_SECRET=your-client-secret
 GITHUB_CALLBACK_URL=http://localhost:3000/api/v1/auth/github/callback
 FRONTEND_URL=http://localhost:5173
+
+# Third Party Proxy (optional)
+THIRD_PARTY_PROXY_ENABLED=false
+THIRD_PARTY_PROXY_URL=http://proxy-host:port
 ```
