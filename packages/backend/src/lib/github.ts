@@ -27,5 +27,5 @@ export async function getGitHubUser(accessToken: string): Promise<GitHubUser> {
     throw new Error('Failed to fetch GitHub user');
   }
 
-  return response.json();
+  return response.json() as Promise<GitHubUser>;
 }

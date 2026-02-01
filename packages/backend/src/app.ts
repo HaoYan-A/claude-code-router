@@ -4,6 +4,8 @@ import helmet from 'helmet';
 import cookieParser from 'cookie-parser';
 import pinoHttp from 'pino-http';
 import swaggerUi from 'swagger-ui-express';
+import path from 'path';
+import { fileURLToPath } from 'url';
 import { API_PREFIX } from '@claude-code-router/shared';
 import { logger } from './lib/logger.js';
 import { errorHandler } from './middlewares/error.middleware.js';
@@ -15,6 +17,9 @@ import { logRoutes } from './modules/log/index.js';
 import { proxyRoutes } from './modules/proxy/index.js';
 import { accountsRoutes } from './modules/accounts/index.js';
 import { quotaRoutes } from './modules/quota/index.js';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 export function createApp(): Express {
   const app = express();
@@ -60,6 +65,24 @@ export function createApp(): Express {
 
   // Proxy routes (mounted at root for Claude API compatibility)
   app.use('/proxy', proxyRoutes);
+
+  // 静态文件托管（生产环境）
+  const publicPath = path.join(__dirname, '../public');
+  app.use(express.static(publicPath));
+
+  // SPA fallback - 所有非 API/proxy 路由返回 index.html
+  app.get('*', (req, res, next) => {
+    // 跳过 API 和 proxy 路由
+    if (req.path.startsWith('/api') || req.path.startsWith('/proxy') || req.path === '/health') {
+      return next();
+    }
+    res.sendFile(path.join(publicPath, 'index.html'), (err) => {
+      if (err) {
+        // 如果 index.html 不存在（开发环境），继续下一个中间件
+        next();
+      }
+    });
+  });
 
   // Error handling
   app.use(errorHandler);

@@ -342,7 +342,8 @@ export class ProxyService {
       body: upstreamRequestBodyStr,
     };
     if (proxyAgent) {
-      fetchOptions.dispatcher = proxyAgent;
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      fetchOptions.dispatcher = proxyAgent as any;
     }
     const response = await fetch(url, fetchOptions);
 

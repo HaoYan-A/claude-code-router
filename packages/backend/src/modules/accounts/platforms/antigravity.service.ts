@@ -100,7 +100,8 @@ async function fetchWithProxy(url: string, options: RequestInit = {}): Promise<R
 
   // 如果启用了代理，添加 dispatcher
   if (proxyAgent) {
-    fetchOptions.dispatcher = proxyAgent;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    fetchOptions.dispatcher = proxyAgent as any;
     logger.debug({ url, proxy: isProxyEnabled() }, 'Fetching with proxy');
   }
 

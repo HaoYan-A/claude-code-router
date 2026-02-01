@@ -1,0 +1,50 @@
+# Dependencies
+node_modules
+**/node_modules
+
+# Build outputs
+**/dist
+packages/frontend/dist
+packages/backend/dist
+packages/shared/dist
+
+# Development files
+.git
+.gitignore
+*.md
+!README.md
+
+# IDE
+.idea
+.vscode
+*.swp
+*.swo
+
+# Environment files (will be mounted or passed as env vars)
+.env
+.env.*
+!.env.example
+
+# Docker files
+Dockerfile*
+docker-compose*.yml
+.dockerignore
+
+# Test files
+**/__tests__
+**/*.test.ts
+**/*.spec.ts
+coverage
+
+# Logs
+*.log
+logs
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Temporary files
+tmp
+temp
+*.tmp
