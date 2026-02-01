@@ -18,13 +18,13 @@ export function UsersPage() {
   const deleteMutation = useDeleteUser();
 
   const handleDelete = async (id: string) => {
-    if (window.confirm('Are you sure you want to delete this user?')) {
+    if (window.confirm('确定要删除该用户吗？')) {
       await deleteMutation.mutateAsync(id);
     }
   };
 
   if (isLoading) {
-    return <div>Loading...</div>;
+    return <div>加载中...</div>;
   }
 
   const users = data?.data.data ?? [];
@@ -33,19 +33,19 @@ export function UsersPage() {
   return (
     <div>
       <div className="mb-6">
-        <h1 className="text-3xl font-bold">Users</h1>
-        <p className="text-muted-foreground">Manage users registered via GitHub OAuth</p>
+        <h1 className="text-3xl font-bold">用户管理</h1>
+        <p className="text-muted-foreground">管理通过 GitHub OAuth 注册的用户</p>
       </div>
       <div className="rounded-md border">
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead>User</TableHead>
-              <TableHead>Email</TableHead>
-              <TableHead>Role</TableHead>
-              <TableHead>Status</TableHead>
-              <TableHead>Created</TableHead>
-              <TableHead className="w-[100px]">Actions</TableHead>
+              <TableHead>用户</TableHead>
+              <TableHead>邮箱</TableHead>
+              <TableHead>角色</TableHead>
+              <TableHead>状态</TableHead>
+              <TableHead>创建时间</TableHead>
+              <TableHead className="w-[100px]">操作</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -85,7 +85,7 @@ export function UsersPage() {
                         : 'bg-red-100 text-red-700'
                     }`}
                   >
-                    {user.isActive ? 'Active' : 'Inactive'}
+                    {user.isActive ? '活跃' : '未激活'}
                   </span>
                 </TableCell>
                 <TableCell>{new Date(user.createdAt).toLocaleDateString()}</TableCell>
@@ -110,10 +110,10 @@ export function UsersPage() {
           onClick={() => setPage((p) => Math.max(1, p - 1))}
           disabled={page === 1}
         >
-          Previous
+          上一页
         </Button>
         <span className="flex items-center px-4 text-sm">
-          Page {page} of {totalPages}
+          第 {page} 页，共 {totalPages} 页
         </span>
         <Button
           variant="outline"
@@ -121,7 +121,7 @@ export function UsersPage() {
           onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
           disabled={page === totalPages}
         >
-          Next
+          下一页
         </Button>
       </div>
     </div>

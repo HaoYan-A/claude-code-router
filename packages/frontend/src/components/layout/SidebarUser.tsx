@@ -29,7 +29,7 @@ export function SidebarUser() {
     navigate('/login');
   };
 
-  const displayName = user?.name || user?.githubUsername || 'User';
+  const displayName = user?.name || user?.githubUsername || '用户';
   const avatarFallback = displayName.slice(0, 2).toUpperCase();
 
   const avatarContent = (
@@ -87,12 +87,12 @@ export function SidebarUser() {
             <DropdownMenuSeparator />
             <DropdownMenuItem>
               <Settings className="mr-2 h-4 w-4" />
-              Settings
+              设置
             </DropdownMenuItem>
             <DropdownMenuSeparator />
             <DropdownMenuItem onClick={handleLogout} className="text-red-600">
               <LogOut className="mr-2 h-4 w-4" />
-              Logout
+              退出登录
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>

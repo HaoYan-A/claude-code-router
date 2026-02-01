@@ -18,7 +18,7 @@ function getBreadcrumbData(pathname: string) {
 
   if (navItem) {
     return {
-      parent: 'Dashboard',
+      parent: '仪表盘',
       current: navItem.label,
     };
   }
@@ -28,14 +28,14 @@ function getBreadcrumbData(pathname: string) {
   if (segments.length > 0) {
     const current = segments[segments.length - 1];
     return {
-      parent: 'Dashboard',
+      parent: '仪表盘',
       current: current.charAt(0).toUpperCase() + current.slice(1),
     };
   }
 
   return {
     parent: null,
-    current: 'Dashboard',
+    current: '仪表盘',
   };
 }
 

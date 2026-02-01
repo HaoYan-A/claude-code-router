@@ -24,7 +24,7 @@ export function AccountActionsCard({ account, onEdit, onDeleted }: AccountAction
   };
 
   const handleDelete = async () => {
-    if (window.confirm('Are you sure you want to delete this account? This action cannot be undone.')) {
+    if (window.confirm('确定要删除此账户吗？此操作无法撤销。')) {
       await deleteMutation.mutateAsync(account.id);
       onDeleted?.();
     }
@@ -36,7 +36,7 @@ export function AccountActionsCard({ account, onEdit, onDeleted }: AccountAction
   return (
     <Card>
       <CardHeader className="pb-3">
-        <CardTitle className="text-lg">Actions</CardTitle>
+        <CardTitle className="text-lg">操作</CardTitle>
       </CardHeader>
       <CardContent className="space-y-2">
         <Button
@@ -50,7 +50,7 @@ export function AccountActionsCard({ account, onEdit, onDeleted }: AccountAction
           ) : (
             <RefreshCw className="mr-2 h-4 w-4" />
           )}
-          Refresh Quota
+          刷新配额
         </Button>
 
         <Button
@@ -64,7 +64,7 @@ export function AccountActionsCard({ account, onEdit, onDeleted }: AccountAction
           ) : (
             <Key className="mr-2 h-4 w-4" />
           )}
-          Refresh Token
+          刷新令牌
         </Button>
 
         <Button
@@ -73,7 +73,7 @@ export function AccountActionsCard({ account, onEdit, onDeleted }: AccountAction
           onClick={onEdit}
         >
           <Edit className="mr-2 h-4 w-4" />
-          Edit Account
+          编辑账户
         </Button>
 
         <Button
@@ -87,7 +87,7 @@ export function AccountActionsCard({ account, onEdit, onDeleted }: AccountAction
           ) : (
             <Trash2 className="mr-2 h-4 w-4" />
           )}
-          Delete Account
+          删除账户
         </Button>
       </CardContent>
     </Card>

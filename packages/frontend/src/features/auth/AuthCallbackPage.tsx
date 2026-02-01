@@ -31,10 +31,10 @@ export function AuthCallbackPage() {
         });
         navigate('/dashboard', { replace: true });
       } catch {
-        navigate('/login?error=Failed to parse user data', { replace: true });
+        navigate('/login?error=用户数据解析失败', { replace: true });
       }
     } else {
-      navigate('/login?error=Missing authentication data', { replace: true });
+      navigate('/login?error=缺少认证数据', { replace: true });
     }
   }, [searchParams, setAuth, navigate]);
 
@@ -42,7 +42,7 @@ export function AuthCallbackPage() {
     <div className="flex min-h-screen items-center justify-center">
       <div className="text-center">
         <Loader2 className="mx-auto h-8 w-8 animate-spin text-emerald-600" />
-        <p className="mt-2 text-muted-foreground">Completing sign in...</p>
+        <p className="mt-2 text-muted-foreground">正在完成登录...</p>
       </div>
     </div>
   );

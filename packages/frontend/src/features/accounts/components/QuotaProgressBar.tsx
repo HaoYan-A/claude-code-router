@@ -35,7 +35,7 @@ function formatResetTime(resetTime: string | null | undefined): string | null {
 
     // 如果已经过期
     if (diffMs <= 0) {
-      return 'Now';
+      return '现在';
     }
 
     const diffMinutes = Math.floor(diffMs / (1000 * 60));
@@ -115,7 +115,7 @@ export function QuotaProgressBar({
       </div>
       {formattedResetTime && (
         <p className="text-xs text-muted-foreground">
-          重置: {formattedResetTime}
+          重置时间: {formattedResetTime}
         </p>
       )}
     </div>

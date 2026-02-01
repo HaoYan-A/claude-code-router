@@ -19,25 +19,25 @@ function formatTokens(tokens: number): string {
 export function AccountUsageCard({ account }: AccountUsageCardProps) {
   const stats = [
     {
-      label: 'Total Requests',
+      label: '请求总数',
       value: account.totalRequests.toLocaleString(),
       icon: Activity,
       color: 'text-blue-500',
     },
     {
-      label: 'Input Tokens',
+      label: '输入令牌',
       value: formatTokens(account.totalInputTokens),
       icon: ArrowDown,
       color: 'text-green-500',
     },
     {
-      label: 'Output Tokens',
+      label: '输出令牌',
       value: formatTokens(account.totalOutputTokens),
       icon: ArrowUp,
       color: 'text-purple-500',
     },
     {
-      label: 'Cache Tokens',
+      label: '缓存令牌',
       value: formatTokens(account.totalCacheTokens),
       icon: Clock,
       color: 'text-orange-500',
@@ -47,7 +47,7 @@ export function AccountUsageCard({ account }: AccountUsageCardProps) {
   return (
     <Card>
       <CardHeader className="pb-3">
-        <CardTitle className="text-lg">Usage Statistics</CardTitle>
+        <CardTitle className="text-lg">使用统计</CardTitle>
       </CardHeader>
       <CardContent>
         <div className="grid grid-cols-2 gap-4">
@@ -64,7 +64,7 @@ export function AccountUsageCard({ account }: AccountUsageCardProps) {
 
         {account.lastUsedAt && (
           <div className="mt-4 pt-4 border-t text-sm text-muted-foreground">
-            Last used: {new Date(account.lastUsedAt).toLocaleString()}
+            上次使用: {new Date(account.lastUsedAt).toLocaleString()}
           </div>
         )}
       </CardContent>

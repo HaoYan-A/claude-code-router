@@ -11,10 +11,10 @@ interface ApiKeyStatsCardProps {
 }
 
 const TIME_RANGE_LABELS: Record<StatsTimeRange, string> = {
-  day: 'Today',
-  week: 'This Week',
-  month: 'This Month',
-  total: 'All Time',
+  day: '今日',
+  week: '本周',
+  month: '本月',
+  total: '全部',
 };
 
 export function ApiKeyStatsCard({ apiKeyId, isAdmin = false }: ApiKeyStatsCardProps) {
@@ -43,7 +43,7 @@ export function ApiKeyStatsCard({ apiKeyId, isAdmin = false }: ApiKeyStatsCardPr
       <Card>
         <CardContent className="pt-6">
           <div className="flex items-center justify-center h-40 text-muted-foreground">
-            Loading stats...
+            加载统计中...
           </div>
         </CardContent>
       </Card>
@@ -55,7 +55,7 @@ export function ApiKeyStatsCard({ apiKeyId, isAdmin = false }: ApiKeyStatsCardPr
       <Card>
         <CardContent className="pt-6">
           <div className="flex items-center justify-center h-40 text-muted-foreground">
-            No statistics available
+            暂无统计数据
           </div>
         </CardContent>
       </Card>
@@ -66,7 +66,7 @@ export function ApiKeyStatsCard({ apiKeyId, isAdmin = false }: ApiKeyStatsCardPr
     <Card>
       <CardHeader className="pb-2">
         <div className="flex items-center justify-between">
-          <CardTitle className="text-lg">Usage Statistics</CardTitle>
+          <CardTitle className="text-lg">使用统计</CardTitle>
           <Tabs value={timeRange} onValueChange={(v: string) => setTimeRange(v as StatsTimeRange)}>
             <TabsList className="h-8">
               {(['day', 'week', 'month', 'total'] as StatsTimeRange[]).map((range) => (
@@ -83,14 +83,14 @@ export function ApiKeyStatsCard({ apiKeyId, isAdmin = false }: ApiKeyStatsCardPr
           <div className="space-y-1">
             <div className="flex items-center gap-2 text-sm text-muted-foreground">
               <Activity className="h-4 w-4" />
-              Requests
+              请求次数
             </div>
             <div className="text-2xl font-bold">{formatNumber(stats.totalRequests)}</div>
           </div>
           <div className="space-y-1">
             <div className="flex items-center gap-2 text-sm text-muted-foreground">
               <DollarSign className="h-4 w-4" />
-              Total Cost
+              总费用
             </div>
             <div className="text-2xl font-bold">{formatCost(stats.totalCost)}</div>
           </div>
@@ -100,14 +100,14 @@ export function ApiKeyStatsCard({ apiKeyId, isAdmin = false }: ApiKeyStatsCardPr
           <div className="space-y-1">
             <div className="flex items-center gap-2 text-sm text-muted-foreground">
               <ArrowUpRight className="h-4 w-4" />
-              Input Tokens
+              输入 Tokens
             </div>
             <div className="text-lg font-semibold">{formatNumber(stats.totalInputTokens)}</div>
           </div>
           <div className="space-y-1">
             <div className="flex items-center gap-2 text-sm text-muted-foreground">
               <ArrowDownRight className="h-4 w-4" />
-              Output Tokens
+              输出 Tokens
             </div>
             <div className="text-lg font-semibold">{formatNumber(stats.totalOutputTokens)}</div>
           </div>
@@ -115,7 +115,7 @@ export function ApiKeyStatsCard({ apiKeyId, isAdmin = false }: ApiKeyStatsCardPr
 
         {stats.byModel.length > 0 && (
           <div className="pt-2 border-t">
-            <div className="text-sm font-medium mb-2">By Model</div>
+            <div className="text-sm font-medium mb-2">按模型统计</div>
             <div className="space-y-2">
               {stats.byModel.map((modelStats) => (
                 <div
@@ -124,7 +124,7 @@ export function ApiKeyStatsCard({ apiKeyId, isAdmin = false }: ApiKeyStatsCardPr
                 >
                   <span className="text-muted-foreground">{modelStats.model}</span>
                   <div className="flex items-center gap-4">
-                    <span>{formatNumber(modelStats.requestCount)} req</span>
+                    <span>{formatNumber(modelStats.requestCount)} 次</span>
                     <span className="font-medium">{formatCost(modelStats.cost)}</span>
                   </div>
                 </div>

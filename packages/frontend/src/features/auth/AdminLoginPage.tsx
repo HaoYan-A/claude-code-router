@@ -33,7 +33,7 @@ export function AdminLoginPage() {
       });
       navigate('/dashboard');
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Login failed');
+      setError(err instanceof Error ? err.message : '登录失败');
     }
   };
 
@@ -44,8 +44,8 @@ export function AdminLoginPage() {
           <div className="mx-auto mb-2 flex h-12 w-12 items-center justify-center rounded-full bg-slate-900">
             <Shield className="h-6 w-6 text-white" />
           </div>
-          <CardTitle className="text-2xl font-bold">Admin Login</CardTitle>
-          <CardDescription>Enter admin password to continue</CardDescription>
+          <CardTitle className="text-2xl font-bold">管理员登录</CardTitle>
+          <CardDescription>请输入管理员密码以继续</CardDescription>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-4">
@@ -55,22 +55,22 @@ export function AdminLoginPage() {
               </div>
             )}
             <div className="space-y-2">
-              <Label htmlFor="password">Password</Label>
+              <Label htmlFor="password">密码</Label>
               <Input
                 id="password"
                 type="password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                placeholder="Enter admin password"
+                placeholder="请输入管理员密码"
                 required
               />
             </div>
             <Button type="submit" className="w-full" disabled={loginMutation.isPending}>
-              {loginMutation.isPending ? 'Logging in...' : 'Login'}
+              {loginMutation.isPending ? '登录中...' : '登录'}
             </Button>
             <div className="text-center text-sm text-muted-foreground">
               <Link to="/login" className="text-emerald-600 hover:underline">
-                User Login
+                用户登录
               </Link>
             </div>
           </form>

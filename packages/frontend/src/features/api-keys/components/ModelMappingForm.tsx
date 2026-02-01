@@ -68,7 +68,7 @@ export function ModelMappingForm({ value, onChange, disabled }: ModelMappingForm
 
   return (
     <div className="space-y-4">
-      <Label className="text-sm font-medium">Model Mappings</Label>
+      <Label className="text-sm font-medium">模型映射</Label>
       <div className="space-y-3">
         {CLAUDE_MODEL_SLOTS.map((slot) => {
           const mapping = getMappingForSlot(slot);

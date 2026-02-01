@@ -45,7 +45,7 @@ export function QuotaBreakdownCard({ accountId }: QuotaBreakdownCardProps) {
     <Card>
       <CardHeader className="pb-3">
         <div className="flex items-center justify-between">
-          <CardTitle className="text-lg">Quota Breakdown</CardTitle>
+          <CardTitle className="text-lg">配额详情</CardTitle>
           <Button
             variant="ghost"
             size="icon"
@@ -67,7 +67,7 @@ export function QuotaBreakdownCard({ accountId }: QuotaBreakdownCardProps) {
           </div>
         ) : aggregatedQuotas.length === 0 ? (
           <p className="text-sm text-muted-foreground text-center py-4">
-            No quota data available
+            暂无配额数据
           </p>
         ) : (
           aggregatedQuotas.map((quota) => (

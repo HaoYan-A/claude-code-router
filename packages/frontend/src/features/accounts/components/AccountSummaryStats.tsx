@@ -25,28 +25,28 @@ export function AccountSummaryStats({ accounts }: AccountSummaryStatsProps) {
 
   const stats = [
     {
-      label: 'Total Accounts',
+      label: '账户总数',
       value: totalAccounts,
       icon: Users,
       color: 'text-blue-500',
       bg: 'bg-blue-500/10',
     },
     {
-      label: 'Active',
+      label: '活跃账户',
       value: activeAccounts,
       icon: CheckCircle,
       color: 'text-green-500',
       bg: 'bg-green-500/10',
     },
     {
-      label: 'Avg Quota',
+      label: '平均配额',
       value: `${avgQuota}%`,
       icon: Percent,
       color: 'text-purple-500',
       bg: 'bg-purple-500/10',
     },
     {
-      label: 'Total Requests',
+      label: '请求总数',
       value: totalRequests.toLocaleString(),
       icon: Activity,
       color: 'text-orange-500',

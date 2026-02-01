@@ -101,9 +101,9 @@ export function AddAccountDialog({ open, onOpenChange }: AddAccountDialogProps) 
     <Dialog open={open} onOpenChange={handleClose}>
       <DialogContent className="sm:max-w-[520px]">
         <DialogHeader>
-          <DialogTitle>Add Antigravity Account</DialogTitle>
+          <DialogTitle>添加 Antigravity 账户</DialogTitle>
           <DialogDescription>
-            Connect your Antigravity account to use its API quota
+            连接您的 Antigravity 账户以使用其 API 配额
           </DialogDescription>
         </DialogHeader>
 
@@ -111,11 +111,11 @@ export function AddAccountDialog({ open, onOpenChange }: AddAccountDialogProps) 
           <TabsList className="grid w-full grid-cols-2">
             <TabsTrigger value="oauth" className="flex items-center gap-2">
               <Globe className="h-4 w-4" />
-              OAuth Authorization
+              OAuth 授权
             </TabsTrigger>
             <TabsTrigger value="manual" className="flex items-center gap-2">
               <KeyRound className="h-4 w-4" />
-              Manual Token
+              手动令牌
             </TabsTrigger>
           </TabsList>
 
@@ -128,15 +128,15 @@ export function AddAccountDialog({ open, onOpenChange }: AddAccountDialogProps) 
                     <div className="flex h-6 w-6 items-center justify-center rounded-full bg-primary text-primary-foreground text-sm font-medium">
                       1
                     </div>
-                    <span className="font-medium">Open Authorization Page</span>
+                    <span className="font-medium">打开授权页面</span>
                   </div>
                   <p className="text-sm text-muted-foreground pl-8">
-                    Click the button below to open the Antigravity login page in a new window
+                    点击下方按钮在新窗口中打开 Antigravity 登录页面
                   </p>
                   <div className="flex items-center gap-2 pl-8">
                     <Button type="button" onClick={handleOpenOAuth} disabled={!oauthUrl}>
                       <ExternalLink className="mr-2 h-4 w-4" />
-                      Open Login
+                      打开登录
                     </Button>
                     <Button
                       type="button"
@@ -160,10 +160,10 @@ export function AddAccountDialog({ open, onOpenChange }: AddAccountDialogProps) 
                     <div className="flex h-6 w-6 items-center justify-center rounded-full bg-primary text-primary-foreground text-sm font-medium">
                       2
                     </div>
-                    <span className="font-medium">Paste Callback URL</span>
+                    <span className="font-medium">粘贴回调 URL</span>
                   </div>
                   <p className="text-sm text-muted-foreground pl-8">
-                    After authorization, copy the URL from your browser and paste it below
+                    授权完成后，复制浏览器中的 URL 并粘贴到下方
                   </p>
                   <div className="pl-8">
                     <Input
@@ -177,10 +177,10 @@ export function AddAccountDialog({ open, onOpenChange }: AddAccountDialogProps) 
                 {/* Account Settings */}
                 <div className="space-y-4 pt-2">
                   <div className="space-y-2">
-                    <Label htmlFor="oauth-name">Name (optional)</Label>
+                    <Label htmlFor="oauth-name">名称（可选）</Label>
                     <Input
                       id="oauth-name"
-                      placeholder="e.g., My Work Account"
+                      placeholder="例如：我的工作账户"
                       value={oauthName}
                       onChange={(e) => setOAuthName(e.target.value)}
                     />
@@ -188,7 +188,7 @@ export function AddAccountDialog({ open, onOpenChange }: AddAccountDialogProps) 
 
                   <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-2">
-                      <Label htmlFor="oauth-priority">Priority (1-100)</Label>
+                      <Label htmlFor="oauth-priority">优先级 (1-100)</Label>
                       <Input
                         id="oauth-priority"
                         type="number"
@@ -199,7 +199,7 @@ export function AddAccountDialog({ open, onOpenChange }: AddAccountDialogProps) 
                       />
                     </div>
                     <div className="space-y-2">
-                      <Label htmlFor="oauth-schedulable">Schedulable</Label>
+                      <Label htmlFor="oauth-schedulable">可调度</Label>
                       <div className="flex items-center h-10">
                         <Switch
                           id="oauth-schedulable"
@@ -207,7 +207,7 @@ export function AddAccountDialog({ open, onOpenChange }: AddAccountDialogProps) 
                           onCheckedChange={setOAuthSchedulable}
                         />
                         <span className="ml-2 text-sm text-muted-foreground">
-                          {oauthSchedulable ? 'Yes' : 'No'}
+                          {oauthSchedulable ? '是' : '否'}
                         </span>
                       </div>
                     </div>
@@ -217,16 +217,16 @@ export function AddAccountDialog({ open, onOpenChange }: AddAccountDialogProps) 
 
               <DialogFooter className="mt-6">
                 <Button type="button" variant="outline" onClick={handleClose}>
-                  Cancel
+                  取消
                 </Button>
                 <Button type="submit" disabled={!codeUrl || isPending}>
                   {isPending ? (
                     <>
                       <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      Adding...
+                      添加中...
                     </>
                   ) : (
-                    'Add Account'
+                    '添加账户'
                   )}
                 </Button>
               </DialogFooter>
@@ -237,24 +237,24 @@ export function AddAccountDialog({ open, onOpenChange }: AddAccountDialogProps) 
             <form onSubmit={handleManualSubmit}>
               <div className="space-y-4">
                 <div className="space-y-2">
-                  <Label htmlFor="refresh-token">Refresh Token</Label>
+                  <Label htmlFor="refresh-token">刷新令牌</Label>
                   <Input
                     id="refresh-token"
                     type="password"
-                    placeholder="Enter your refresh token"
+                    placeholder="输入您的刷新令牌"
                     value={refreshToken}
                     onChange={(e) => setRefreshToken(e.target.value)}
                   />
                   <p className="text-xs text-muted-foreground">
-                    You can find your refresh token in your Antigravity account settings
+                    您可以在 Antigravity 账户设置中找到刷新令牌
                   </p>
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="manual-name">Name (optional)</Label>
+                  <Label htmlFor="manual-name">名称（可选）</Label>
                   <Input
                     id="manual-name"
-                    placeholder="e.g., Personal Account"
+                    placeholder="例如：个人账户"
                     value={manualName}
                     onChange={(e) => setManualName(e.target.value)}
                   />
@@ -262,7 +262,7 @@ export function AddAccountDialog({ open, onOpenChange }: AddAccountDialogProps) 
 
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
-                    <Label htmlFor="manual-priority">Priority (1-100)</Label>
+                    <Label htmlFor="manual-priority">优先级 (1-100)</Label>
                     <Input
                       id="manual-priority"
                       type="number"
@@ -273,7 +273,7 @@ export function AddAccountDialog({ open, onOpenChange }: AddAccountDialogProps) 
                     />
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="manual-schedulable">Schedulable</Label>
+                    <Label htmlFor="manual-schedulable">可调度</Label>
                     <div className="flex items-center h-10">
                       <Switch
                         id="manual-schedulable"
@@ -281,7 +281,7 @@ export function AddAccountDialog({ open, onOpenChange }: AddAccountDialogProps) 
                         onCheckedChange={setManualSchedulable}
                       />
                       <span className="ml-2 text-sm text-muted-foreground">
-                        {manualSchedulable ? 'Yes' : 'No'}
+                        {manualSchedulable ? '是' : '否'}
                       </span>
                     </div>
                   </div>
@@ -290,16 +290,16 @@ export function AddAccountDialog({ open, onOpenChange }: AddAccountDialogProps) 
 
               <DialogFooter className="mt-6">
                 <Button type="button" variant="outline" onClick={handleClose}>
-                  Cancel
+                  取消
                 </Button>
                 <Button type="submit" disabled={!refreshToken || isPending}>
                   {isPending ? (
                     <>
                       <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      Adding...
+                      添加中...
                     </>
                   ) : (
-                    'Add Account'
+                    '添加账户'
                   )}
                 </Button>
               </DialogFooter>

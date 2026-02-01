@@ -13,21 +13,21 @@ const statusConfig: Record<
 > = {
   created: {
     color: 'bg-yellow-400',
-    label: 'Created',
+    label: '已创建',
   },
   active: {
     color: 'bg-green-500',
     animation: 'animate-pulse',
-    label: 'Active',
+    label: '活跃',
   },
   expired: {
     color: 'bg-red-500',
-    label: 'Expired',
+    label: '已过期',
   },
   error: {
     color: 'bg-red-500',
     animation: 'animate-ping',
-    label: 'Error',
+    label: '错误',
   },
 };
 

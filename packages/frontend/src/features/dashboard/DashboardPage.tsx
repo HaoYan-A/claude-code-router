@@ -37,34 +37,34 @@ export function DashboardPage() {
   const displayName = user?.name || user?.githubUsername || 'User';
 
   if (isLoading) {
-    return <div>Loading...</div>;
+    return <div>加载中...</div>;
   }
 
   const stats = data?.data;
 
   const cards = [
     {
-      title: 'Total Requests',
+      title: '总请求数',
       value: stats?.totalRequests ?? 0,
       icon: Activity,
       trend: 12,
     },
     {
-      title: 'Success',
+      title: '成功',
       value: stats?.successRequests ?? 0,
       icon: CheckCircle,
       iconClassName: 'text-emerald-500',
       trend: 8,
     },
     {
-      title: 'Errors',
+      title: '错误',
       value: stats?.errorRequests ?? 0,
       icon: XCircle,
       iconClassName: 'text-red-500',
       trend: -5,
     },
     {
-      title: 'Total Tokens',
+      title: '总 Token 数',
       value: (stats?.totalInputTokens ?? 0) + (stats?.totalOutputTokens ?? 0),
       icon: Zap,
       iconClassName: 'text-amber-500',
@@ -76,11 +76,11 @@ export function DashboardPage() {
     <div>
       <div className="mb-8">
         <h1 className="text-3xl font-bold">
-          Hi, Welcome back{' '}
+          你好，欢迎回来{' '}
           <span className="text-primary">{displayName}</span>
         </h1>
         <p className="mt-1 text-muted-foreground">
-          Here's what's happening with your API usage today.
+          以下是您今天的 API 使用情况。
         </p>
       </div>
 
@@ -107,7 +107,7 @@ export function DashboardPage() {
       <div className="mt-8 grid gap-4 md:grid-cols-2">
         <Card>
           <CardHeader>
-            <CardTitle>Input Tokens</CardTitle>
+            <CardTitle>输入 Token</CardTitle>
           </CardHeader>
           <CardContent>
             <div className="text-3xl font-bold">
@@ -117,7 +117,7 @@ export function DashboardPage() {
         </Card>
         <Card>
           <CardHeader>
-            <CardTitle>Output Tokens</CardTitle>
+            <CardTitle>输出 Token</CardTitle>
           </CardHeader>
           <CardContent>
             <div className="text-3xl font-bold">

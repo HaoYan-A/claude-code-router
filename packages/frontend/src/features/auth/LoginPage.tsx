@@ -27,7 +27,7 @@ export function LoginPage() {
       <Card className="w-full max-w-sm shadow-lg">
         <CardHeader className="text-center">
           <CardTitle className="text-2xl font-bold">Claude Code Router</CardTitle>
-          <CardDescription>Sign in to manage your API keys</CardDescription>
+          <CardDescription>登录以管理您的 API 密钥</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           {error && (
@@ -40,11 +40,11 @@ export function LoginPage() {
             onClick={handleGitHubLogin}
           >
             <Github className="mr-2 h-5 w-5" />
-            Continue with GitHub
+            使用 GitHub 登录
           </Button>
           <div className="text-center text-sm text-muted-foreground">
             <Link to="/admin/login" className="text-emerald-600 hover:underline">
-              Admin Login
+              管理员登录
             </Link>
           </div>
         </CardContent>

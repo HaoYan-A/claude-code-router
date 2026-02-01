@@ -14,18 +14,18 @@ export interface NavGroup {
 
 export const navigationConfig: NavGroup[] = [
   {
-    label: 'Overview',
+    label: '概览',
     items: [
-      { path: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
+      { path: '/dashboard', label: '仪表盘', icon: LayoutDashboard },
     ],
   },
   {
-    label: 'Management',
+    label: '管理',
     items: [
-      { path: '/users', label: 'Users', icon: Users, adminOnly: true },
-      { path: '/accounts', label: 'Accounts', icon: Cloud, adminOnly: true },
-      { path: '/api-keys', label: 'API Keys', icon: Key },
-      { path: '/logs', label: 'Logs', icon: FileText },
+      { path: '/users', label: '用户', icon: Users, adminOnly: true },
+      { path: '/accounts', label: '账户', icon: Cloud, adminOnly: true },
+      { path: '/api-keys', label: 'API 密钥', icon: Key },
+      { path: '/logs', label: '日志', icon: FileText },
     ],
   },
 ];

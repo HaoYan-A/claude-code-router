@@ -73,30 +73,30 @@ export function CreateApiKeyDialog({ open, onOpenChange }: CreateApiKeyDialogPro
         {step === 'form' ? (
           <>
             <DialogHeader>
-              <DialogTitle>Create New API Key</DialogTitle>
+              <DialogTitle>创建新 API 密钥</DialogTitle>
               <DialogDescription>
-                Configure your API key and model mappings. Leave the name empty for auto-generation.
+                配置你的 API 密钥和模型映射。名称留空将自动生成。
               </DialogDescription>
             </DialogHeader>
             <form onSubmit={handleSubmit}>
               <div className="space-y-4 py-4">
                 <div className="space-y-2">
-                  <Label htmlFor="keyName">Name (optional)</Label>
+                  <Label htmlFor="keyName">名称（可选）</Label>
                   <Input
                     id="keyName"
                     value={name}
                     onChange={(e) => setName(e.target.value)}
-                    placeholder="e.g., Production Key"
+                    placeholder="例如：生产环境密钥"
                   />
                 </div>
                 <ModelMappingForm value={mappings} onChange={setMappings} />
               </div>
               <DialogFooter>
                 <Button type="button" variant="outline" onClick={handleClose}>
-                  Cancel
+                  取消
                 </Button>
                 <Button type="submit" disabled={createMutation.isPending}>
-                  {createMutation.isPending ? 'Creating...' : 'Create Key'}
+                  {createMutation.isPending ? '创建中...' : '创建密钥'}
                 </Button>
               </DialogFooter>
             </form>
@@ -104,9 +104,9 @@ export function CreateApiKeyDialog({ open, onOpenChange }: CreateApiKeyDialogPro
         ) : (
           <>
             <DialogHeader>
-              <DialogTitle>API Key Created</DialogTitle>
+              <DialogTitle>API 密钥已创建</DialogTitle>
               <DialogDescription>
-                Please save this key now. You won't be able to see it again.
+                请立即保存此密钥，之后将无法再次查看。
               </DialogDescription>
             </DialogHeader>
             <div className="py-4">
@@ -126,7 +126,7 @@ export function CreateApiKeyDialog({ open, onOpenChange }: CreateApiKeyDialogPro
               </div>
             </div>
             <DialogFooter>
-              <Button onClick={handleClose}>Done</Button>
+              <Button onClick={handleClose}>完成</Button>
             </DialogFooter>
           </>
         )}

@@ -65,19 +65,19 @@ export function EditAccountDialog({ open, onOpenChange, account }: EditAccountDi
     <Dialog open={open} onOpenChange={handleClose}>
       <DialogContent className="sm:max-w-[425px]">
         <DialogHeader>
-          <DialogTitle>Edit Account</DialogTitle>
+          <DialogTitle>编辑账户</DialogTitle>
           <DialogDescription>
-            Update the account settings. Changes will take effect immediately.
+            更新账户设置。更改将立即生效。
           </DialogDescription>
         </DialogHeader>
 
         <form onSubmit={handleSubmit}>
           <div className="space-y-4 py-4">
             <div className="space-y-2">
-              <Label htmlFor="edit-name">Name</Label>
+              <Label htmlFor="edit-name">名称</Label>
               <Input
                 id="edit-name"
-                placeholder="Account name"
+                placeholder="账户名称"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
               />
@@ -85,9 +85,9 @@ export function EditAccountDialog({ open, onOpenChange, account }: EditAccountDi
 
             <div className="flex items-center justify-between">
               <div className="space-y-0.5">
-                <Label htmlFor="edit-active">Active</Label>
+                <Label htmlFor="edit-active">启用</Label>
                 <p className="text-sm text-muted-foreground">
-                  Enable or disable this account
+                  启用或禁用此账户
                 </p>
               </div>
               <Switch
@@ -98,7 +98,7 @@ export function EditAccountDialog({ open, onOpenChange, account }: EditAccountDi
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="edit-priority">Priority (1-100)</Label>
+              <Label htmlFor="edit-priority">优先级 (1-100)</Label>
               <Input
                 id="edit-priority"
                 type="number"
@@ -108,15 +108,15 @@ export function EditAccountDialog({ open, onOpenChange, account }: EditAccountDi
                 onChange={(e) => setPriority(Number(e.target.value))}
               />
               <p className="text-xs text-muted-foreground">
-                Higher priority accounts are preferred when scheduling requests
+                调度请求时优先使用高优先级账户
               </p>
             </div>
 
             <div className="flex items-center justify-between">
               <div className="space-y-0.5">
-                <Label htmlFor="edit-schedulable">Schedulable</Label>
+                <Label htmlFor="edit-schedulable">可调度</Label>
                 <p className="text-sm text-muted-foreground">
-                  Include in automatic request scheduling
+                  包含在自动请求调度中
                 </p>
               </div>
               <Switch
@@ -129,16 +129,16 @@ export function EditAccountDialog({ open, onOpenChange, account }: EditAccountDi
 
           <DialogFooter>
             <Button type="button" variant="outline" onClick={handleClose}>
-              Cancel
+              取消
             </Button>
             <Button type="submit" disabled={updateMutation.isPending}>
               {updateMutation.isPending ? (
                 <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Saving...
+                  保存中...
                 </>
               ) : (
-                'Save Changes'
+                '保存更改'
               )}
             </Button>
           </DialogFooter>

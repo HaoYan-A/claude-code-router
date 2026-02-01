@@ -62,13 +62,13 @@ export function EditApiKeyDialog({ open, onOpenChange, apiKey, isAdmin = false }
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-[500px]">
         <DialogHeader>
-          <DialogTitle>Edit API Key</DialogTitle>
-          <DialogDescription>Update your API key settings and model mappings.</DialogDescription>
+          <DialogTitle>编辑 API 密钥</DialogTitle>
+          <DialogDescription>更新你的 API 密钥设置和模型映射。</DialogDescription>
         </DialogHeader>
         <form onSubmit={handleSubmit}>
           <div className="space-y-4 py-4">
             <div className="space-y-2">
-              <Label htmlFor="editKeyName">Name</Label>
+              <Label htmlFor="editKeyName">名称</Label>
               <Input
                 id="editKeyName"
                 value={name}
@@ -77,17 +77,17 @@ export function EditApiKeyDialog({ open, onOpenChange, apiKey, isAdmin = false }
               />
             </div>
             <div className="flex items-center justify-between">
-              <Label htmlFor="isActive">Active</Label>
+              <Label htmlFor="isActive">启用</Label>
               <Switch id="isActive" checked={isActive} onCheckedChange={setIsActive} />
             </div>
             <ModelMappingForm value={mappings} onChange={setMappings} />
           </div>
           <DialogFooter>
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
-              Cancel
+              取消
             </Button>
             <Button type="submit" disabled={updateMutation.isPending}>
-              {updateMutation.isPending ? 'Saving...' : 'Save Changes'}
+              {updateMutation.isPending ? '保存中...' : '保存更改'}
             </Button>
           </DialogFooter>
         </form>

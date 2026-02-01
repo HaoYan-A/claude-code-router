@@ -42,7 +42,7 @@ function CopyKeyButton({ apiKeyId }: { apiKeyId: string }) {
       variant="ghost"
       size="icon"
       onClick={handleCopy}
-      title={status === 'error' ? 'Failed to copy' : 'Copy full key'}
+      title={status === 'error' ? '复制失败' : '复制完整密钥'}
       className="h-6 w-6"
     >
       {status === 'success' ? (
@@ -73,7 +73,7 @@ export function ApiKeysPage() {
   const deleteMutation = isAdmin ? adminDeleteMutation : userDeleteMutation;
 
   const handleDelete = async (id: string) => {
-    if (window.confirm('Are you sure you want to delete this API key?')) {
+    if (window.confirm('确定要删除这个 API 密钥吗？')) {
       await deleteMutation.mutateAsync(id);
       if (selectedKeyId === id) {
         setSelectedKeyId(null);
@@ -82,7 +82,7 @@ export function ApiKeysPage() {
   };
 
   if (isLoading) {
-    return <div>Loading...</div>;
+    return <div>加载中...</div>;
   }
 
   const apiKeys = data?.data.data ?? [];
@@ -93,11 +93,11 @@ export function ApiKeysPage() {
       {/* Left Panel - API Key List */}
       <div className="flex-1 flex flex-col min-w-0">
         <div className="mb-6 flex items-center justify-between">
-          <h1 className="text-3xl font-bold">API Keys {isAdmin && '(All Users)'}</h1>
+          <h1 className="text-3xl font-bold">API 密钥 {isAdmin && '(所有用户)'}</h1>
           {!isAdmin && (
             <Button onClick={() => setShowCreate(true)}>
               <Plus className="mr-2 h-4 w-4" />
-              Create Key
+              创建密钥
             </Button>
           )}
         </div>
@@ -106,13 +106,13 @@ export function ApiKeysPage() {
           <Table>
             <TableHeader>
               <TableRow>
-                {isAdmin && <TableHead>User</TableHead>}
-                <TableHead>Name</TableHead>
-                <TableHead>Key Prefix</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead>Last Used</TableHead>
-                <TableHead>Created</TableHead>
-                <TableHead className="w-[120px]">Actions</TableHead>
+                {isAdmin && <TableHead>用户</TableHead>}
+                <TableHead>名称</TableHead>
+                <TableHead>密钥前缀</TableHead>
+                <TableHead>状态</TableHead>
+                <TableHead>最后使用</TableHead>
+                <TableHead>创建时间</TableHead>
+                <TableHead className="w-[120px]">操作</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -121,10 +121,10 @@ export function ApiKeysPage() {
                   <TableCell colSpan={isAdmin ? 7 : 6} className="h-32 text-center">
                     <div className="flex flex-col items-center gap-2 text-muted-foreground">
                       <Key className="h-8 w-8" />
-                      <p>No API keys yet</p>
+                      <p>暂无 API 密钥</p>
                       {!isAdmin && (
                         <Button variant="outline" size="sm" onClick={() => setShowCreate(true)}>
-                          Create your first key
+                          创建你的第一个密钥
                         </Button>
                       )}
                     </div>
@@ -170,11 +170,11 @@ export function ApiKeysPage() {
                             : 'bg-red-100 text-red-700'
                         }`}
                       >
-                        {key.isActive ? 'Active' : 'Inactive'}
+                        {key.isActive ? '已启用' : '已禁用'}
                       </span>
                     </TableCell>
                     <TableCell>
-                      {key.lastUsedAt ? new Date(key.lastUsedAt).toLocaleDateString() : 'Never'}
+                      {key.lastUsedAt ? new Date(key.lastUsedAt).toLocaleDateString() : '从未使用'}
                     </TableCell>
                     <TableCell>{new Date(key.createdAt).toLocaleDateString()}</TableCell>
                     <TableCell>
@@ -186,7 +186,7 @@ export function ApiKeysPage() {
                             e.stopPropagation();
                             setSelectedKeyId(key.id);
                           }}
-                          title="View Stats"
+                          title="查看统计"
                         >
                           <BarChart3 className="h-4 w-4" />
                         </Button>
@@ -197,7 +197,7 @@ export function ApiKeysPage() {
                             e.stopPropagation();
                             setEditingKey(key);
                           }}
-                          title="Edit"
+                          title="编辑"
                         >
                           <Edit className="h-4 w-4" />
                         </Button>
@@ -208,7 +208,7 @@ export function ApiKeysPage() {
                             e.stopPropagation();
                             handleDelete(key.id);
                           }}
-                          title="Delete"
+                          title="删除"
                         >
                           <Trash2 className="h-4 w-4 text-destructive" />
                         </Button>
@@ -230,10 +230,10 @@ export function ApiKeysPage() {
               onClick={() => setPage((p) => Math.max(1, p - 1))}
               disabled={page === 1}
             >
-              Previous
+              上一页
             </Button>
             <span className="flex items-center px-4 text-sm">
-              Page {page} of {totalPages}
+              第 {page} 页，共 {totalPages} 页
             </span>
             <Button
               variant="outline"
@@ -241,7 +241,7 @@ export function ApiKeysPage() {
               onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
               disabled={page === totalPages}
             >
-              Next
+              下一页
             </Button>
           </div>
         )}
@@ -257,7 +257,7 @@ export function ApiKeysPage() {
             {apiKeys.find((k) => k.id === selectedKeyId)?.modelMappings && (
               <Card>
                 <CardHeader className="pb-2">
-                  <CardTitle className="text-lg">Model Mappings</CardTitle>
+                  <CardTitle className="text-lg">模型映射</CardTitle>
                 </CardHeader>
                 <CardContent>
                   <div className="space-y-2">
@@ -283,7 +283,7 @@ export function ApiKeysPage() {
           <Card className="h-full flex items-center justify-center">
             <CardContent className="text-center text-muted-foreground">
               <BarChart3 className="h-12 w-12 mx-auto mb-4 opacity-50" />
-              <p>Select an API key to view statistics</p>
+              <p>选择一个 API 密钥查看统计信息</p>
             </CardContent>
           </Card>
         )}

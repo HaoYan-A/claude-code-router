@@ -43,7 +43,7 @@ export function Sidebar() {
               </Button>
             </TooltipTrigger>
             <TooltipContent side="right">
-              {isCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+              {isCollapsed ? '展开侧边栏' : '收起侧边栏'}
             </TooltipContent>
           </Tooltip>
         </div>

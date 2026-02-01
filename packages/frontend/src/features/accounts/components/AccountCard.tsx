@@ -1,10 +1,12 @@
 import { Card, CardContent } from '@/components/ui/card';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
+import { Switch } from '@/components/ui/switch';
 import { cn } from '@/lib/utils';
 import { SubscriptionBadge } from './SubscriptionBadge';
 import { StatusIndicator } from './StatusIndicator';
 import { QuotaProgressBar } from './QuotaProgressBar';
+import { useUpdateAccount } from '@/lib/queries/accounts';
 import type { ThirdPartyAccount } from '@claude-code-router/shared';
 
 interface AccountCardProps {
@@ -38,6 +40,18 @@ export function AccountCard({ account, selected, onClick }: AccountCardProps) {
   const displayName = account.name || account.platformId.slice(0, 8);
   const initials = displayName.slice(0, 2).toUpperCase();
   const aggregatedQuotas = aggregateQuotas(account.quotas);
+  const updateAccount = useUpdateAccount();
+
+  const handleToggleActive = (e: React.MouseEvent) => {
+    e.stopPropagation();
+  };
+
+  const handleActiveChange = (checked: boolean) => {
+    updateAccount.mutate({
+      id: account.id,
+      data: { isActive: checked },
+    });
+  };
 
   return (
     <Card
@@ -81,7 +95,7 @@ export function AccountCard({ account, selected, onClick }: AccountCardProps) {
                   />
                 ))
               ) : (
-                <div className="text-xs text-muted-foreground">No quota data</div>
+                <div className="text-xs text-muted-foreground">暂无配额数据</div>
               )}
             </div>
           </div>
@@ -89,15 +103,30 @@ export function AccountCard({ account, selected, onClick }: AccountCardProps) {
 
         {/* 底部标签 */}
         <div className="flex items-center gap-2 mt-3 pt-3 border-t">
+          {/* 启用/禁用开关 */}
+          <div
+            className="flex items-center gap-1.5"
+            onClick={handleToggleActive}
+          >
+            <Switch
+              checked={account.isActive}
+              onCheckedChange={handleActiveChange}
+              disabled={updateAccount.isPending}
+              className="scale-90"
+            />
+            <span className="text-xs text-muted-foreground">
+              {account.isActive ? '启用' : '禁用'}
+            </span>
+          </div>
           <Badge variant={account.schedulable ? 'default' : 'secondary'} className="text-xs">
-            {account.schedulable ? 'Schedulable' : 'Manual'}
+            {account.schedulable ? '可调度' : '手动'}
           </Badge>
           <Badge variant="outline" className="text-xs">
-            Priority: {account.priority}
+            优先级: {account.priority}
           </Badge>
           {account.errorMessage && (
             <Badge variant="destructive" className="text-xs truncate max-w-32">
-              Error
+              错误
             </Badge>
           )}
         </div>

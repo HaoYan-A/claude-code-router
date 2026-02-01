@@ -19,14 +19,14 @@ export function AccountCardGrid({
     return (
       <div className="flex flex-col items-center justify-center py-16 text-muted-foreground">
         <CloudOff className="h-12 w-12 mb-4 opacity-50" />
-        <p className="text-lg font-medium mb-2">No accounts yet</p>
-        <p className="text-sm mb-4">Add your first third-party account to get started</p>
+        <p className="text-lg font-medium mb-2">暂无账户</p>
+        <p className="text-sm mb-4">添加您的第一个第三方账户以开始使用</p>
         {onAddClick && (
           <button
             onClick={onAddClick}
             className="text-primary hover:underline text-sm font-medium"
           >
-            + Add Account
+            + 添加账户
           </button>
         )}
       </div>

@@ -51,9 +51,9 @@ export function AccountsPage() {
       {/* Header */}
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="text-3xl font-bold">Antigravity Accounts</h1>
+          <h1 className="text-3xl font-bold">Antigravity 账户</h1>
           <p className="text-muted-foreground mt-1">
-            Manage your third-party API accounts
+            管理您的第三方 API 账户
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -67,11 +67,11 @@ export function AccountsPage() {
             ) : (
               <RefreshCw className="mr-2 h-4 w-4" />
             )}
-            Refresh All
+            刷新全部
           </Button>
           <Button onClick={() => setShowAddDialog(true)}>
             <Plus className="mr-2 h-4 w-4" />
-            Add Account
+            添加账户
           </Button>
         </div>
       </div>
