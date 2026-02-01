@@ -63,9 +63,9 @@ export function ApiKeysPage() {
   const user = useAuthStore((state) => state.user);
   const isAdmin = user?.role === 'admin';
 
-  // 根据角色选择不同的 API
-  const userApiKeys = useApiKeys(page);
-  const adminApiKeys = useAdminApiKeys(page);
+  // 根据角色选择不同的 API，只执行对应的请求
+  const userApiKeys = useApiKeys(page, 20, !isAdmin);
+  const adminApiKeys = useAdminApiKeys(page, 20, undefined, isAdmin);
   const userDeleteMutation = useDeleteApiKey();
   const adminDeleteMutation = useAdminDeleteApiKey();
 

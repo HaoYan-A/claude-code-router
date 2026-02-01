@@ -117,6 +117,10 @@ export function ModelMappingForm({ value, onChange, disabled }: ModelMappingForm
           );
         })}
       </div>
+      <p className="text-xs text-muted-foreground">
+        <span className="font-medium">💡 建议：</span>
+        Haiku 在 Claude Code 中主要用于子 Agent 调查代码，建议映射到 Gemini 3 Flash 等快速模型，以避免影响整体执行速度。
+      </p>
     </div>
   );
 }

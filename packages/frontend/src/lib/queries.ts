@@ -15,6 +15,7 @@ import type {
   StatsTimeRange,
   ApiKeyUsageStatsResponse,
   ApiKeyDailyUsageResponse,
+  QuotaSummaryResponse,
 } from '@claude-code-router/shared';
 
 interface ApiResponse<T> {
@@ -68,13 +69,14 @@ export function useDeleteUser() {
 }
 
 // API Keys
-export function useApiKeys(page = 1, pageSize = 20) {
+export function useApiKeys(page = 1, pageSize = 20, enabled = true) {
   return useQuery({
     queryKey: ['api-keys', page, pageSize],
     queryFn: () =>
       api.get<PaginatedResponse<ApiKeyWithMappingsResponse>>(
         `/api-keys?page=${page}&pageSize=${pageSize}`
       ),
+    enabled,
   });
 }
 
@@ -89,7 +91,8 @@ export function useApiKey(id: string) {
 export function useApiKeyStats(
   id: string,
   timeRange: StatsTimeRange = 'month',
-  includeDaily = false
+  includeDaily = false,
+  enabled = true
 ) {
   return useQuery({
     queryKey: ['api-keys', id, 'stats', timeRange, includeDaily],
@@ -100,7 +103,7 @@ export function useApiKeyStats(
           daily?: ApiKeyDailyUsageResponse[];
         }>
       >(`/api-keys/${id}/stats?timeRange=${timeRange}&includeDaily=${includeDaily}`),
-    enabled: !!id,
+    enabled: !!id && enabled,
   });
 }
 
@@ -131,7 +134,7 @@ export function useDeleteApiKey() {
 }
 
 // Admin API Keys
-export function useAdminApiKeys(page = 1, pageSize = 20, userId?: string) {
+export function useAdminApiKeys(page = 1, pageSize = 20, userId?: string, enabled = true) {
   const params = new URLSearchParams({
     page: String(page),
     pageSize: String(pageSize),
@@ -142,13 +145,15 @@ export function useAdminApiKeys(page = 1, pageSize = 20, userId?: string) {
     queryKey: ['admin', 'api-keys', page, pageSize, userId],
     queryFn: () =>
       api.get<PaginatedResponse<ApiKeyWithUserResponse>>(`/api-keys/admin/all?${params}`),
+    enabled,
   });
 }
 
 export function useAdminApiKeyStats(
   id: string,
   timeRange: StatsTimeRange = 'month',
-  includeDaily = false
+  includeDaily = false,
+  enabled = true
 ) {
   return useQuery({
     queryKey: ['admin', 'api-keys', id, 'stats', timeRange, includeDaily],
@@ -159,7 +164,7 @@ export function useAdminApiKeyStats(
           daily?: ApiKeyDailyUsageResponse[];
         }>
       >(`/api-keys/admin/${id}/stats?timeRange=${timeRange}&includeDaily=${includeDaily}`),
-    enabled: !!id,
+    enabled: !!id && enabled,
   });
 }
 
@@ -208,9 +213,9 @@ export function useLogDetail(id: string | null) {
   });
 }
 
-export function useLogStats() {
+export function useLogStats(timeRange: StatsTimeRange = 'total') {
   return useQuery({
-    queryKey: ['logs', 'stats'],
+    queryKey: ['logs', 'stats', timeRange],
     queryFn: () =>
       api.get<
         ApiResponse<{
@@ -219,7 +224,17 @@ export function useLogStats() {
           errorRequests: number;
           totalInputTokens: number;
           totalOutputTokens: number;
+          totalCost: number;
         }>
-      >('/logs/stats'),
+      >(`/logs/stats?timeRange=${timeRange}`),
+  });
+}
+
+// Quota Summary
+export function useQuotaSummary() {
+  return useQuery({
+    queryKey: ['quota', 'summary'],
+    queryFn: () => api.get<ApiResponse<QuotaSummaryResponse>>('/quota/summary'),
+    refetchInterval: 60000, // 每分钟刷新
   });
 }

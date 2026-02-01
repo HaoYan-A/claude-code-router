@@ -1,37 +1,12 @@
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { useLogStats } from '@/lib/queries';
 import { useAuthStore } from '@/stores/auth.store';
-import { Activity, CheckCircle, XCircle, Zap, TrendingUp, TrendingDown } from 'lucide-react';
+import { Activity, CheckCircle, XCircle, DollarSign } from 'lucide-react';
 import { cn } from '@/lib/utils';
-
-interface TrendIndicatorProps {
-  value: number;
-  suffix?: string;
-}
-
-function TrendIndicator({ value, suffix = '%' }: TrendIndicatorProps) {
-  const isPositive = value >= 0;
-  const Icon = isPositive ? TrendingUp : TrendingDown;
-
-  return (
-    <div
-      className={cn(
-        'flex items-center gap-1 text-xs font-medium',
-        isPositive ? 'text-emerald-600' : 'text-red-600'
-      )}
-    >
-      <Icon className="h-3 w-3" />
-      <span>
-        {isPositive ? '+' : ''}
-        {value}
-        {suffix}
-      </span>
-    </div>
-  );
-}
+import { QuotaSummaryCard } from './components/QuotaSummaryCard';
 
 export function DashboardPage() {
-  const { data, isLoading } = useLogStats();
+  const { data, isLoading } = useLogStats('day');
   const { user } = useAuthStore();
 
   const displayName = user?.name || user?.githubUsername || 'User';
@@ -42,33 +17,37 @@ export function DashboardPage() {
 
   const stats = data?.data;
 
+  const formatCost = (cost: number) => {
+    return `$${cost.toFixed(4)}`;
+  };
+
   const cards = [
     {
-      title: '总请求数',
+      title: '请求数',
       value: stats?.totalRequests ?? 0,
+      formattedValue: (stats?.totalRequests ?? 0).toLocaleString(),
       icon: Activity,
-      trend: 12,
     },
     {
       title: '成功',
       value: stats?.successRequests ?? 0,
+      formattedValue: (stats?.successRequests ?? 0).toLocaleString(),
       icon: CheckCircle,
       iconClassName: 'text-emerald-500',
-      trend: 8,
     },
     {
       title: '错误',
       value: stats?.errorRequests ?? 0,
+      formattedValue: (stats?.errorRequests ?? 0).toLocaleString(),
       icon: XCircle,
       iconClassName: 'text-red-500',
-      trend: -5,
     },
     {
-      title: '总 Token 数',
-      value: (stats?.totalInputTokens ?? 0) + (stats?.totalOutputTokens ?? 0),
-      icon: Zap,
-      iconClassName: 'text-amber-500',
-      trend: 15,
+      title: '费用',
+      value: stats?.totalCost ?? 0,
+      formattedValue: formatCost(stats?.totalCost ?? 0),
+      icon: DollarSign,
+      iconClassName: 'text-green-500',
     },
   ];
 
@@ -96,15 +75,14 @@ export function DashboardPage() {
                 />
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold">{card.value.toLocaleString()}</div>
-                <TrendIndicator value={card.trend} />
+                <div className="text-2xl font-bold">{card.formattedValue}</div>
               </CardContent>
             </Card>
           );
         })}
       </div>
 
-      <div className="mt-8 grid gap-4 md:grid-cols-2">
+      <div className="mt-8 grid gap-4 md:grid-cols-2 lg:grid-cols-3">
         <Card>
           <CardHeader>
             <CardTitle>输入 Token</CardTitle>
@@ -125,6 +103,7 @@ export function DashboardPage() {
             </div>
           </CardContent>
         </Card>
+        <QuotaSummaryCard />
       </div>
     </div>
   );

@@ -19,8 +19,9 @@ const TIME_RANGE_LABELS: Record<StatsTimeRange, string> = {
 
 export function ApiKeyStatsCard({ apiKeyId, isAdmin = false }: ApiKeyStatsCardProps) {
   const [timeRange, setTimeRange] = useState<StatsTimeRange>('month');
-  const userStats = useApiKeyStats(apiKeyId, timeRange);
-  const adminStats = useAdminApiKeyStats(apiKeyId, timeRange);
+  // 根据 isAdmin 控制哪个 hook 执行请求，避免权限错误
+  const userStats = useApiKeyStats(apiKeyId, timeRange, false, !isAdmin);
+  const adminStats = useAdminApiKeyStats(apiKeyId, timeRange, false, isAdmin);
   const { data, isLoading } = isAdmin ? adminStats : userStats;
 
   const stats = data?.data.stats;

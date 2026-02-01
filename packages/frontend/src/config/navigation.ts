@@ -1,4 +1,4 @@
-import { LayoutDashboard, Users, Key, FileText, Cloud, LucideIcon } from 'lucide-react';
+import { LayoutDashboard, Users, Key, FileText, Cloud, Book, Lightbulb, LucideIcon } from 'lucide-react';
 
 export interface NavItem {
   path: string;
@@ -26,6 +26,13 @@ export const navigationConfig: NavGroup[] = [
       { path: '/accounts', label: '账户', icon: Cloud, adminOnly: true },
       { path: '/api-keys', label: 'API 密钥', icon: Key },
       { path: '/logs', label: '日志', icon: FileText },
+    ],
+  },
+  {
+    label: '帮助',
+    items: [
+      { path: '/guide', label: '使用指南', icon: Book },
+      { path: '/best-practices', label: '最佳实践', icon: Lightbulb },
     ],
   },
 ];

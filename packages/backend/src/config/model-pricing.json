@@ -1,0 +1,57 @@
+{
+  "version": "1.0.0",
+  "lastUpdated": "2026-02-01",
+  "currency": "USD",
+  "unit": "per_million_tokens",
+  "models": {
+    "claude-opus-4-5-thinking": {
+      "description": "Antigravity 平台 - Claude Opus 4.5",
+      "input": 5.00,
+      "output": 25.00,
+      "cacheRead": 0.50,
+      "cacheWrite": 6.25
+    },
+    "claude-sonnet-4-5-thinking": {
+      "description": "Antigravity 平台 - Claude Sonnet 4.5",
+      "input": 3.30,
+      "output": 16.50,
+      "cacheRead": 0.33,
+      "cacheWrite": 4.125
+    },
+    "gemini-3-flash": {
+      "description": "Antigravity 平台 - Gemini 3 Flash",
+      "input": 0.50,
+      "output": 3.00,
+      "cacheRead": 0.05,
+      "cacheStorage": 1.00
+    },
+    "gemini-3-pro-high": {
+      "description": "Antigravity 平台 - Gemini 3 Pro",
+      "input": 2.00,
+      "output": 12.00,
+      "cacheRead": 0.20,
+      "cacheStorage": 4.50
+    },
+    "claude-opus-4.5": {
+      "description": "Kiro 平台 - Claude Opus 4.5（与官方定价一致）",
+      "input": 5.00,
+      "output": 25.00,
+      "cacheRead": 0.50,
+      "cacheWrite": 6.25
+    },
+    "claude-sonnet-4.5": {
+      "description": "Kiro 平台 - Claude Sonnet 4.5（与官方定价一致）",
+      "input": 3.30,
+      "output": 16.50,
+      "cacheRead": 0.33,
+      "cacheWrite": 4.125
+    },
+    "claude-haiku-4.5": {
+      "description": "Kiro 平台 - Claude Haiku 4.5（与官方定价一致）",
+      "input": 1.10,
+      "output": 5.50,
+      "cacheRead": 0.11,
+      "cacheWrite": 1.375
+    }
+  }
+}

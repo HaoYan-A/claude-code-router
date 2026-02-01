@@ -14,6 +14,7 @@ import { apiKeyRoutes } from './modules/api-key/index.js';
 import { logRoutes } from './modules/log/index.js';
 import { proxyRoutes } from './modules/proxy/index.js';
 import { accountsRoutes } from './modules/accounts/index.js';
+import { quotaRoutes } from './modules/quota/index.js';
 
 export function createApp(): Express {
   const app = express();
@@ -55,6 +56,7 @@ export function createApp(): Express {
   app.use(`${API_PREFIX}/api-keys`, apiKeyRoutes);
   app.use(`${API_PREFIX}/logs`, logRoutes);
   app.use(`${API_PREFIX}/accounts`, accountsRoutes);
+  app.use(`${API_PREFIX}/quota`, quotaRoutes);
 
   // Proxy routes (mounted at root for Claude API compatibility)
   app.use('/proxy', proxyRoutes);

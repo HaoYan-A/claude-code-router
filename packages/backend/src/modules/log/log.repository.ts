@@ -1,5 +1,5 @@
 import type { RequestLog, Prisma, RequestStatus } from '@prisma/client';
-import type { LogFilterSchema, RequestLogSummary } from '@claude-code-router/shared';
+import type { LogFilterSchema, RequestLogSummary, StatsTimeRange } from '@claude-code-router/shared';
 import { prisma } from '../../lib/prisma.js';
 
 export class LogRepository {
@@ -137,10 +137,25 @@ export class LogRepository {
     });
   }
 
-  async getStats(userId?: string) {
+  async getStats(userId?: string, timeRange: StatsTimeRange = 'total') {
     const where: Prisma.RequestLogWhereInput = userId ? { userId } : {};
 
-    const [total, success, error, tokens] = await Promise.all([
+    // 添加时间过滤
+    if (timeRange !== 'total') {
+      const now = new Date();
+      let startDate: Date;
+      if (timeRange === 'day') {
+        startDate = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+      } else if (timeRange === 'week') {
+        startDate = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+      } else {
+        // month
+        startDate = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+      }
+      where.createdAt = { gte: startDate };
+    }
+
+    const [total, success, error, aggregates] = await Promise.all([
       prisma.requestLog.count({ where }),
       prisma.requestLog.count({ where: { ...where, status: 'success' } }),
       prisma.requestLog.count({ where: { ...where, status: 'error' } }),
@@ -149,6 +164,7 @@ export class LogRepository {
         _sum: {
           inputTokens: true,
           outputTokens: true,
+          cost: true,
         },
       }),
     ]);
@@ -157,8 +173,9 @@ export class LogRepository {
       totalRequests: total,
       successRequests: success,
       errorRequests: error,
-      totalInputTokens: tokens._sum.inputTokens ?? 0,
-      totalOutputTokens: tokens._sum.outputTokens ?? 0,
+      totalInputTokens: aggregates._sum.inputTokens ?? 0,
+      totalOutputTokens: aggregates._sum.outputTokens ?? 0,
+      totalCost: aggregates._sum.cost?.toNumber() ?? 0,
     };
   }
 }

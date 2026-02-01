@@ -1,4 +1,4 @@
-import type { LogFilterSchema } from '@claude-code-router/shared';
+import type { LogFilterSchema, StatsTimeRange } from '@claude-code-router/shared';
 import { ErrorCodes } from '@claude-code-router/shared';
 import { logRepository } from './log.repository.js';
 import { AppError } from '../../middlewares/error.middleware.js';
@@ -26,8 +26,8 @@ export class LogService {
     };
   }
 
-  async getStats(userId?: string) {
-    return logRepository.getStats(userId);
+  async getStats(userId?: string, timeRange: StatsTimeRange = 'total') {
+    return logRepository.getStats(userId, timeRange);
   }
 }
 

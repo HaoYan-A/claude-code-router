@@ -9,6 +9,8 @@ import { UsersPage } from './features/users/UsersPage';
 import { ApiKeysPage } from './features/api-keys/ApiKeysPage';
 import { LogsPage } from './features/logs/LogsPage';
 import { AccountsPage } from './features/accounts/AccountsPage';
+import { GuidePage } from './features/guide/GuidePage';
+import { BestPracticesPage } from './features/guide/BestPracticesPage';
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
@@ -40,6 +42,8 @@ function App() {
         <Route path="accounts" element={<AccountsPage />} />
         <Route path="api-keys" element={<ApiKeysPage />} />
         <Route path="logs" element={<LogsPage />} />
+        <Route path="guide" element={<GuidePage />} />
+        <Route path="best-practices" element={<BestPracticesPage />} />
       </Route>
     </Routes>
   );

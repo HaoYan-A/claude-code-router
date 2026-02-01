@@ -220,10 +220,45 @@ export class AccountsService {
     }
 
     if (refreshedAccount.platform === 'antigravity') {
-      const quotas = await antigravityService.getQuotas(refreshedAccount.accessToken);
+      let quotas;
+      let currentAccessToken = refreshedAccount.accessToken;
+
+      try {
+        quotas = await antigravityService.getQuotas(currentAccessToken);
+      } catch (error) {
+        // 403 错误时自动刷新 token 并重试一次
+        if (error instanceof AppError && error.statusCode === 403) {
+          logger.info({ accountId: id }, 'Got 403, refreshing token and retrying...');
+          await this.refreshToken(id);
+
+          // 重新获取刷新后的账号
+          const retryAccount = await accountsRepository.findById(id);
+          if (!retryAccount || !retryAccount.accessToken) {
+            throw new AppError(500, ErrorCodes.ACCOUNT_AUTH_FAILED, 'Failed to refresh token');
+          }
+          currentAccessToken = retryAccount.accessToken;
+
+          // 重试获取额度
+          quotas = await antigravityService.getQuotas(currentAccessToken);
+        } else {
+          throw error;
+        }
+      }
 
       for (const quota of quotas) {
         await accountsRepository.upsertQuota(id, quota.model, quota.percentage, quota.resetTime);
+      }
+
+      // 获取并更新订阅等级
+      try {
+        const subscription = await antigravityService.fetchProjectIdAndSubscription(currentAccessToken);
+        if (subscription.tier) {
+          await accountsRepository.update(id, {
+            subscriptionTier: subscription.tier,
+          });
+        }
+      } catch (error) {
+        logger.warn({ accountId: id, error }, 'Failed to update subscription tier');
       }
 
       const result = await accountsRepository.findById(id);

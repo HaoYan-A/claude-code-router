@@ -218,12 +218,14 @@ export class AccountSelector {
   async updateUsageStats(
     accountId: string,
     inputTokens: number,
-    outputTokens: number
+    outputTokens: number,
+    cacheTokens: number = 0
   ): Promise<void> {
     await accountsRepository.updateUsageStats(accountId, {
       totalRequests: 1,
       totalInputTokens: inputTokens,
       totalOutputTokens: outputTokens,
+      totalCacheTokens: cacheTokens,
       lastUsedAt: new Date(),
     });
   }

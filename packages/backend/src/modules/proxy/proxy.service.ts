@@ -416,11 +416,17 @@ export class ProxyService {
         rawInputTokens: result.rawInputTokens,
         rawOutputTokens: result.rawOutputTokens,
         rawCacheTokens: result.rawCacheTokens,
+        // API Key ID（用于日度聚合）
+        apiKeyId: context.apiKeyId,
       });
 
-      // 异步更新账号统计
-      accountSelector.updateUsageStats(context.accountId, result.inputTokens, result.outputTokens)
-        .catch((err) => logger.error({ err, accountId: context.accountId }, 'Failed to update account stats'));
+      // 异步更新账号统计（包含缓存 token）
+      accountSelector.updateUsageStats(
+        context.accountId,
+        result.inputTokens,
+        result.outputTokens,
+        result.cacheReadTokens || 0
+      ).catch((err) => logger.error({ err, accountId: context.accountId }, 'Failed to update account stats'));
     } else {
       // 非流式响应
       const geminiResponseText = await response.text();
@@ -467,13 +473,16 @@ export class ProxyService {
         rawInputTokens,
         rawOutputTokens,
         rawCacheTokens,
+        // API Key ID（用于日度聚合）
+        apiKeyId: context.apiKeyId,
       });
 
-      // 异步更新账号统计
+      // 异步更新账号统计（包含缓存 token）
       accountSelector.updateUsageStats(
         context.accountId,
         claudeResponse.usage.input_tokens,
-        claudeResponse.usage.output_tokens
+        claudeResponse.usage.output_tokens,
+        claudeResponse.usage.cache_read_input_tokens || 0
       ).catch((err) => logger.error({ err, accountId: context.accountId }, 'Failed to update account stats'));
     }
   }

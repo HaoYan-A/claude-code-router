@@ -1,7 +1,26 @@
 import { z } from 'zod';
 import { paginationSchema, dateRangeSchema } from './common.schema.js';
+import { STATS_TIME_RANGES } from '../constants/models.js';
 
 export const requestStatusSchema = z.enum(['success', 'error', 'pending']);
+
+// 统计查询参数 schema
+export const logStatsQuerySchema = z.object({
+  timeRange: z.enum(STATS_TIME_RANGES).optional().default('total'),
+});
+
+// 统计响应 schema
+export const logStatsResponseSchema = z.object({
+  totalRequests: z.number(),
+  successRequests: z.number(),
+  errorRequests: z.number(),
+  totalInputTokens: z.number(),
+  totalOutputTokens: z.number(),
+  totalCost: z.number(),
+});
+
+export type LogStatsQuery = z.infer<typeof logStatsQuerySchema>;
+export type LogStatsResponse = z.infer<typeof logStatsResponseSchema>;
 
 export const logFilterSchema = paginationSchema.merge(dateRangeSchema).extend({
   userId: z.string().uuid().optional(),
