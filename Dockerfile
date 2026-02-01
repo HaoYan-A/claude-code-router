@@ -55,6 +55,7 @@ RUN pnpm install --frozen-lockfile
 # 从 builder 复制构建产物
 COPY --from=builder /app/packages/shared/dist ./packages/shared/dist
 COPY --from=builder /app/packages/backend/dist ./packages/backend/dist
+COPY --from=builder /app/packages/backend/src/config/*.json ./packages/backend/dist/config/
 
 # 复制 Prisma schema
 COPY --from=builder /app/packages/backend/prisma ./packages/backend/prisma
