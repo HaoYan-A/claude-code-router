@@ -1,0 +1,39 @@
+# Build stage
+FROM node:20-alpine AS builder
+
+WORKDIR /app
+
+# Install pnpm
+RUN corepack enable && corepack prepare pnpm@9.1.0 --activate
+
+# Copy workspace files
+COPY pnpm-workspace.yaml package.json pnpm-lock.yaml* ./
+COPY packages/shared/package.json ./packages/shared/
+COPY packages/frontend/package.json ./packages/frontend/
+
+# Install dependencies
+RUN pnpm install --frozen-lockfile
+
+# Copy source code
+COPY packages/shared ./packages/shared
+COPY packages/frontend ./packages/frontend
+COPY tsconfig.base.json ./
+
+# Build shared package
+RUN pnpm --filter @claude-code-router/shared build
+
+# Build frontend
+RUN pnpm --filter @claude-code-router/frontend build
+
+# Production stage - nginx
+FROM nginx:alpine AS production
+
+# Copy nginx config
+COPY docker/nginx.conf /etc/nginx/conf.d/default.conf
+
+# Copy built files
+COPY --from=builder /app/packages/frontend/dist /usr/share/nginx/html
+
+EXPOSE 80
+
+CMD ["nginx", "-g", "daemon off;"]

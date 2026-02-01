@@ -1,0 +1,24 @@
+{
+  "name": "claude-code-router",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Claude Code API Router with user management and rate limiting",
+  "scripts": {
+    "dev:backend": "pnpm --filter @claude-code-router/backend dev",
+    "dev:frontend": "pnpm --filter @claude-code-router/frontend dev",
+    "build": "pnpm -r build",
+    "build:shared": "pnpm --filter @claude-code-router/shared build",
+    "build:backend": "pnpm --filter @claude-code-router/backend build",
+    "build:frontend": "pnpm --filter @claude-code-router/frontend build",
+    "test": "pnpm -r test",
+    "lint": "pnpm -r lint",
+    "db:generate": "pnpm --filter @claude-code-router/backend prisma:generate",
+    "db:push": "pnpm --filter @claude-code-router/backend prisma:push",
+    "db:migrate": "pnpm --filter @claude-code-router/backend prisma:migrate"
+  },
+  "engines": {
+    "node": ">=20.0.0",
+    "pnpm": ">=8.0.0"
+  },
+  "packageManager": "pnpm@9.1.0"
+}

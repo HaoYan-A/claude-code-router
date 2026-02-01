@@ -1,0 +1,249 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  admin
+  user
+}
+
+enum RequestStatus {
+  success
+  error
+  pending
+}
+
+// 第三方账号平台类型
+enum AccountPlatform {
+  antigravity
+  // 未来可扩展: claude, openai, gemini 等
+}
+
+// 第三方账号状态
+enum AccountStatus {
+  created // 刚创建，未验证
+  active // 活跃可用
+  expired // Token 已过期
+  error // 出错状态
+}
+
+model User {
+  id             String   @id @default(uuid())
+  githubId       String   @unique @map("github_id")
+  githubUsername String   @map("github_username")
+  avatarUrl      String?  @map("avatar_url")
+  email          String?
+  name           String?
+  role           UserRole @default(user)
+  isActive       Boolean  @default(true) @map("is_active")
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  apiKeys     ApiKey[]
+  requestLogs RequestLog[]
+
+  @@map("users")
+}
+
+model ApiKey {
+  id         String    @id @default(uuid())
+  userId     String    @map("user_id")
+  name       String
+  keyHash    String    @unique @map("key_hash")
+  keyPrefix  String    @map("key_prefix")
+  fullKey    String?   @map("full_key")
+  isActive   Boolean   @default(true) @map("is_active")
+  expiresAt  DateTime? @map("expires_at")
+  lastUsedAt DateTime? @map("last_used_at")
+  createdAt  DateTime  @default(now()) @map("created_at")
+  updatedAt  DateTime  @updatedAt @map("updated_at")
+
+  user          User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+  requestLogs   RequestLog[]
+  modelMappings ApiKeyModelMapping[]
+  dailyUsages   ApiKeyDailyUsage[]
+
+  @@unique([userId, name])
+  @@index([userId])
+  @@index([keyHash])
+  @@map("api_keys")
+}
+
+model RequestLog {
+  id           String        @id @default(uuid())
+  userId       String        @map("user_id")
+  apiKeyId     String        @map("api_key_id")
+  method       String
+  path         String
+  status       RequestStatus @default(pending)
+  statusCode   Int?          @map("status_code")
+  requestBody  String?       @map("request_body") @db.Text
+  responseBody String?       @map("response_body") @db.Text
+  errorMessage String?       @map("error_message") @db.Text
+  inputTokens  Int?          @map("input_tokens")
+  outputTokens Int?          @map("output_tokens")
+  durationMs   Int?          @map("duration_ms")
+  clientIp     String?       @map("client_ip")
+  userAgent    String?       @map("user_agent")
+  model        String? // 原始请求模型 (Claude)
+  targetModel  String?       @map("target_model") // 映射后的目标模型 (Antigravity/Gemini)
+  platform     String? // 代理平台 (antigravity)
+  accountId    String?       @map("account_id") // 使用的第三方账号 ID
+  cost         Decimal?      @db.Decimal(12, 6)
+  createdAt    DateTime      @default(now()) @map("created_at")
+
+  // 客户端请求头 (JSON，已脱敏)
+  clientHeaders           String?   @map("client_headers") @db.Text
+
+  // 下游请求 (发给 Antigravity)
+  upstreamRequestHeaders  String?   @map("upstream_request_headers") @db.Text
+  upstreamRequestBody     String?   @map("upstream_request_body") @db.Text
+
+  // 下游响应 (Antigravity 返回)
+  upstreamResponseHeaders String?   @map("upstream_response_headers") @db.Text
+  upstreamResponseBody    String?   @map("upstream_response_body") @db.Text
+
+  // 客户端响应头
+  clientResponseHeaders   String?   @map("client_response_headers") @db.Text
+
+  // 缓存 Token (映射后，返回给客户端)
+  cacheReadTokens         Int?      @map("cache_read_tokens")
+  cacheCreationTokens     Int?      @map("cache_creation_tokens")
+
+  // 原始 Token (Google/Antigravity 返回，用于对账)
+  rawInputTokens          Int?      @map("raw_input_tokens")
+  rawOutputTokens         Int?      @map("raw_output_tokens")
+  rawCacheTokens          Int?      @map("raw_cache_tokens")
+
+  user    User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  apiKey  ApiKey             @relation(fields: [apiKeyId], references: [id], onDelete: Cascade)
+  account ThirdPartyAccount? @relation(fields: [accountId], references: [id], onDelete: SetNull)
+
+  @@index([userId])
+  @@index([apiKeyId])
+  @@index([createdAt])
+  @@index([status])
+  @@index([accountId])
+  @@map("request_logs")
+}
+
+model RefreshToken {
+  id        String   @id @default(uuid())
+  userId    String?  @map("user_id")
+  isAdmin   Boolean  @default(false) @map("is_admin")
+  tokenHash String   @unique @map("token_hash")
+  expiresAt DateTime @map("expires_at")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([userId])
+  @@index([tokenHash])
+  @@map("refresh_tokens")
+}
+
+// API Key 模型映射配置
+model ApiKeyModelMapping {
+  id          String   @id @default(uuid())
+  apiKeyId    String   @map("api_key_id")
+  claudeModel String   @map("claude_model") // "opus" | "sonnet" | "haiku"
+  platform    String // "antigravity" | "kiro"
+  targetModel String   @map("target_model") // e.g., "claude-opus-4.5"
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  apiKey ApiKey @relation(fields: [apiKeyId], references: [id], onDelete: Cascade)
+
+  @@unique([apiKeyId, claudeModel])
+  @@index([apiKeyId])
+  @@map("api_key_model_mappings")
+}
+
+// 每日用量聚合表
+model ApiKeyDailyUsage {
+  id           String   @id @default(uuid())
+  apiKeyId     String   @map("api_key_id")
+  date         DateTime @db.Date
+  model        String // 实际使用的模型
+  requestCount Int      @default(0) @map("request_count")
+  inputTokens  Int      @default(0) @map("input_tokens")
+  outputTokens Int      @default(0) @map("output_tokens")
+  cost         Decimal  @default(0) @db.Decimal(12, 6)
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  apiKey ApiKey @relation(fields: [apiKeyId], references: [id], onDelete: Cascade)
+
+  @@unique([apiKeyId, date, model])
+  @@index([apiKeyId])
+  @@index([date])
+  @@map("api_key_daily_usage")
+}
+
+// 第三方账号主表
+model ThirdPartyAccount {
+  id         String          @id @default(uuid())
+  platform   AccountPlatform
+  platformId String          @map("platform_id") // 平台唯一标识（Antigravity: email）
+  name       String? // 账号别名
+
+  // 认证信息（加密存储）
+  refreshToken   String?   @map("refresh_token")
+  accessToken    String?   @map("access_token")
+  tokenExpiresAt DateTime? @map("token_expires_at")
+
+  // 订阅信息
+  subscriptionTier      String?   @map("subscription_tier") // FREE, PRO, ULTRA
+  subscriptionExpiresAt DateTime? @map("subscription_expires_at")
+  subscriptionRaw       Json?     @map("subscription_raw") // 原始订阅数据
+
+  // 状态
+  isActive     Boolean       @default(true) @map("is_active")
+  status       AccountStatus @default(created)
+  errorMessage String?       @map("error_message")
+
+  // 调度配置
+  priority    Int     @default(50) // 1-100，越小优先级越高
+  schedulable Boolean @default(true)
+
+  // 使用统计（后续通过 log 同步）
+  totalRequests     Int       @default(0) @map("total_requests")
+  totalInputTokens  Int       @default(0) @map("total_input_tokens")
+  totalOutputTokens Int       @default(0) @map("total_output_tokens")
+  totalCacheTokens  Int       @default(0) @map("total_cache_tokens")
+  lastUsedAt        DateTime? @map("last_used_at")
+
+  // 时间戳
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  // 关联
+  quotas      AccountQuota[]
+  requestLogs RequestLog[]
+
+  @@unique([platform, platformId])
+  @@index([platform])
+  @@index([isActive])
+  @@index([status])
+  @@index([priority])
+  @@map("third_party_accounts")
+}
+
+// 账号额度表
+model AccountQuota {
+  id            String   @id @default(uuid())
+  accountId     String   @map("account_id")
+  modelName     String   @map("model_name") // 模型名称
+  percentage    Int // 剩余百分比 0-100
+  resetTime     String?  @map("reset_time") // 重置时间描述
+  lastUpdatedAt DateTime @default(now()) @map("last_updated_at")
+
+  account ThirdPartyAccount @relation(fields: [accountId], references: [id], onDelete: Cascade)
+
+  @@unique([accountId, modelName])
+  @@index([accountId])
+  @@map("account_quotas")
+}
