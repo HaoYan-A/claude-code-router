@@ -2,6 +2,7 @@ import crypto from 'crypto';
 import { logger } from '../../../lib/logger.js';
 import { AppError } from '../../../middlewares/error.middleware.js';
 import { ErrorCodes } from '@claude-code-router/shared';
+import { getProxyAgent, isProxyEnabled } from '../../../lib/proxy-agent.js';
 
 // Google OAuth 配置（硬编码，与 Antigravity 客户端一致）
 const ANTIGRAVITY_CLIENT_ID = '1071006060591-tmhssin2h21lcre235vtolojh4g403ep.apps.googleusercontent.com';
@@ -88,15 +89,22 @@ function decodeState(state: string): OAuthStateData {
 }
 
 async function fetchWithProxy(url: string, options: RequestInit = {}): Promise<Response> {
-  // 如果启用了代理，可以在这里配置
-  // 目前直接使用 fetch
-  return fetch(url, {
+  const proxyAgent = getProxyAgent();
+  const fetchOptions: RequestInit & { dispatcher?: unknown } = {
     ...options,
     headers: {
       'User-Agent': USER_AGENT,
       ...options.headers,
     },
-  });
+  };
+
+  // 如果启用了代理，添加 dispatcher
+  if (proxyAgent) {
+    fetchOptions.dispatcher = proxyAgent;
+    logger.debug({ url, proxy: isProxyEnabled() }, 'Fetching with proxy');
+  }
+
+  return fetch(url, fetchOptions);
 }
 
 export class AntigravityService {
@@ -368,8 +376,9 @@ export class AntigravityService {
       }
 
       if (response.status === 403) {
-        logger.warn('Account forbidden (403)');
-        return [];
+        const errorBody = await response.text();
+        logger.warn({ status: 403, error: errorBody }, 'Account forbidden (403)');
+        throw new AppError(403, ErrorCodes.ACCOUNT_FORBIDDEN, `Antigravity API error: 403 - ${errorBody}`);
       }
 
       if (!response.ok) {

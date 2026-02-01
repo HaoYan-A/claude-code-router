@@ -1,5 +1,6 @@
 import type { Request, Response } from 'express';
 import type { LogFilterSchema } from '@claude-code-router/shared';
+import { logStatsQuerySchema } from '@claude-code-router/shared';
 import { logService } from './log.service.js';
 
 export class LogController {
@@ -21,7 +22,8 @@ export class LogController {
 
   async getStats(req: Request, res: Response): Promise<void> {
     const userId = req.auth!.role === 'admin' ? undefined : req.auth!.userId;
-    const stats = await logService.getStats(userId);
+    const { timeRange } = logStatsQuerySchema.parse(req.query);
+    const stats = await logService.getStats(userId, timeRange);
     res.json({ success: true, data: stats });
   }
 }

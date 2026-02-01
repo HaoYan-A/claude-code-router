@@ -18,6 +18,7 @@ import { logRepository } from '../log/log.repository.js';
 import { logBuffer } from '../log/log-buffer.js';
 import { apiKeyRepository } from '../api-key/api-key.repository.js';
 import { accountSelector } from './account-selector.js';
+import { getProxyAgent } from '../../lib/proxy-agent.js';
 import {
   convertClaudeToGemini,
   extractModelSlot,
@@ -333,12 +334,17 @@ export class ProxyService {
       'Sending request to Antigravity'
     );
 
-    // 发送请求
-    const response = await fetch(url, {
+    // 发送请求（支持代理）
+    const proxyAgent = getProxyAgent();
+    const fetchOptions: RequestInit & { dispatcher?: unknown } = {
       method: 'POST',
       headers: upstreamHeaders,
       body: upstreamRequestBodyStr,
-    });
+    };
+    if (proxyAgent) {
+      fetchOptions.dispatcher = proxyAgent;
+    }
+    const response = await fetch(url, fetchOptions);
 
     // 收集上游响应头
     const upstreamResponseHeaders: Record<string, string> = {};
