@@ -36,8 +36,10 @@ RUN pnpm db:generate && pnpm build:backend
 # Stage 2: Production
 FROM node:20-alpine AS production
 
-# 安装 OpenSSL（Prisma 需要）
-RUN apk add --no-cache openssl
+# 配置 Alpine 镜像源并安装 OpenSSL（Prisma 需要）
+RUN sed -i 's/dl-cdn.alpinelinux.org/mirrors.aliyun.com/g' /etc/apk/repositories && \
+    apk update && \
+    apk add --no-cache openssl
 
 WORKDIR /app
 
