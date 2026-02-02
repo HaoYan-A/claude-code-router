@@ -16,7 +16,7 @@ import { CreateApiKeyDialog, EditApiKeyDialog, ApiKeyStatsCard } from './compone
 import { useAuthStore } from '@/stores/auth.store';
 import type { ApiKeyWithMappingsResponse, ApiKeyWithUserResponse } from '@claude-code-router/shared';
 
-function CopyKeyButton({ apiKeyId }: { apiKeyId: string }) {
+function CopyKeyButton({ apiKeyId, isAdmin = false }: { apiKeyId: string; isAdmin?: boolean }) {
   const [status, setStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
 
   const handleCopy = async (e: React.MouseEvent) => {
@@ -25,8 +25,10 @@ function CopyKeyButton({ apiKeyId }: { apiKeyId: string }) {
 
     setStatus('loading');
     try {
+      const endpoint = isAdmin ? `/api-keys/admin/${apiKeyId}/key` : `/api-keys/${apiKeyId}/key`;
       const response = await api.get<{ success: boolean; data: { key: string } }>(
-        `/api-keys/${apiKeyId}/key`
+        endpoint,
+        { headers: { 'Cache-Control': 'no-cache' } }
       );
       await navigator.clipboard.writeText(response.data.key);
       setStatus('success');
@@ -159,7 +161,7 @@ export function ApiKeysPage() {
                         <code className="rounded bg-muted px-2 py-1 text-sm">
                           {key.keyPrefix}...
                         </code>
-                        <CopyKeyButton apiKeyId={key.id} />
+                        <CopyKeyButton apiKeyId={key.id} isAdmin={isAdmin} />
                       </div>
                     </TableCell>
                     <TableCell>
