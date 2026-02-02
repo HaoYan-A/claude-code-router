@@ -21,6 +21,7 @@ enum RequestStatus {
 // 第三方账号平台类型
 enum AccountPlatform {
   antigravity
+  kiro
   // 未来可扩展: claude, openai, gemini 等
 }
 
@@ -208,6 +209,11 @@ model ThirdPartyAccount {
   // 调度配置
   priority    Int     @default(50) // 1-100，越小优先级越高
   schedulable Boolean @default(true)
+
+  // Kiro 特有字段（仅 Kiro 平台使用）
+  kiroClientId     String? @map("kiro_client_id")
+  kiroClientSecret String? @map("kiro_client_secret")
+  kiroRegion       String? @map("kiro_region") // 如 "us-east-1"
 
   // 使用统计（后续通过 log 同步）
   totalRequests     Int       @default(0) @map("total_requests")

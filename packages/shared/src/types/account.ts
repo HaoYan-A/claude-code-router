@@ -3,7 +3,7 @@
  */
 
 // 平台类型
-export type AccountPlatform = 'antigravity';
+export type AccountPlatform = 'antigravity' | 'kiro';
 
 // 账号状态
 export type AccountStatus = 'created' | 'active' | 'expired' | 'error';
@@ -113,4 +113,26 @@ export interface PlatformModel {
 // 平台模型列表响应
 export interface PlatformModelsResponse {
   [platform: string]: PlatformModel[];
+}
+
+// Kiro 导入相关类型
+export interface KiroAuthToken {
+  accessToken: string;
+  refreshToken: string;
+  expiresAt: string;
+  clientIdHash: string;
+  region: string;
+}
+
+export interface KiroClientConfig {
+  clientId: string;
+  clientSecret: string;
+}
+
+export interface ImportKiroAccountInput {
+  authToken: KiroAuthToken;
+  clientConfig: KiroClientConfig;
+  name?: string;
+  priority?: number;
+  schedulable?: boolean;
 }

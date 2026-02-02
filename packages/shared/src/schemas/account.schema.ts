@@ -1,7 +1,7 @@
 import { z } from 'zod';
 
 // 平台类型
-export const accountPlatformSchema = z.enum(['antigravity']);
+export const accountPlatformSchema = z.enum(['antigravity', 'kiro']);
 
 // 账号状态
 export const accountStatusSchema = z.enum(['created', 'active', 'expired', 'error']);
@@ -101,6 +101,28 @@ export const platformModelSchema = z.object({
 // 平台模型列表响应 Schema
 export const platformModelsResponseSchema = z.record(z.string(), z.array(platformModelSchema));
 
+// Kiro 导入请求 Schema
+export const kiroAuthTokenSchema = z.object({
+  accessToken: z.string().min(1),
+  refreshToken: z.string().min(1),
+  expiresAt: z.string().datetime(),
+  clientIdHash: z.string().min(1),
+  region: z.string().min(1), // 如 "us-east-1"
+});
+
+export const kiroClientConfigSchema = z.object({
+  clientId: z.string().min(1),
+  clientSecret: z.string().min(1),
+});
+
+export const importKiroAccountSchema = z.object({
+  authToken: kiroAuthTokenSchema,
+  clientConfig: kiroClientConfigSchema,
+  name: z.string().min(1).max(100).optional(),
+  priority: z.number().int().min(1).max(100).default(50),
+  schedulable: z.boolean().default(true),
+});
+
 // 类型导出
 export type AccountPlatformSchema = z.infer<typeof accountPlatformSchema>;
 export type AccountStatusSchema = z.infer<typeof accountStatusSchema>;
@@ -114,3 +136,6 @@ export type AccountListQuerySchema = z.infer<typeof accountListQuerySchema>;
 export type AvailableAccountQuerySchema = z.infer<typeof availableAccountQuerySchema>;
 export type PlatformModelSchema = z.infer<typeof platformModelSchema>;
 export type PlatformModelsResponseSchema = z.infer<typeof platformModelsResponseSchema>;
+export type KiroAuthTokenSchema = z.infer<typeof kiroAuthTokenSchema>;
+export type KiroClientConfigSchema = z.infer<typeof kiroClientConfigSchema>;
+export type ImportKiroAccountSchema = z.infer<typeof importKiroAccountSchema>;

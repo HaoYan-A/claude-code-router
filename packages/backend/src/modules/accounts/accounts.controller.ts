@@ -5,6 +5,7 @@ import type {
   AccountListQuerySchema,
   OAuthExchangeSchema,
   AvailableAccountQuerySchema,
+  ImportKiroAccountSchema,
 } from '@claude-code-router/shared';
 import { accountsService } from './accounts.service.js';
 
@@ -126,6 +127,15 @@ export class AccountsController {
   async getModels(_req: Request, res: Response): Promise<void> {
     const models = accountsService.getPlatformModels();
     res.json({ success: true, data: models });
+  }
+
+  /**
+   * 导入 Kiro 账号
+   */
+  async importKiroAccount(req: Request, res: Response): Promise<void> {
+    const input = req.body as ImportKiroAccountSchema;
+    const account = await accountsService.importKiroAccount(input);
+    res.status(201).json({ success: true, data: account });
   }
 }
 
