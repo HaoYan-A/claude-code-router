@@ -66,6 +66,8 @@ export const requestLogResponseSchema = z.object({
 // 列表摘要 schema (用于列表页)
 export const requestLogSummarySchema = z.object({
   id: z.string().uuid(),
+  userId: z.string().uuid(),
+  userName: z.string().nullable(),
   apiKeyId: z.string().uuid(),
   apiKeyName: z.string().nullable(),
   model: z.string().nullable(),

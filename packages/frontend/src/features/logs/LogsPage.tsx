@@ -11,11 +11,14 @@ import {
 import { useLogs } from '@/lib/queries';
 import { CheckCircle, XCircle, Clock, Eye } from 'lucide-react';
 import { LogDetailSheet } from './components/LogDetailSheet';
+import { useAuthStore } from '@/stores/auth.store';
 
 export function LogsPage() {
   const [page, setPage] = useState(1);
   const [selectedLogId, setSelectedLogId] = useState<string | null>(null);
   const { data, isLoading } = useLogs({ page, pageSize: 20 });
+  const user = useAuthStore((state) => state.user);
+  const isAdmin = user?.role === 'admin';
 
   if (isLoading) {
     return (
@@ -63,8 +66,9 @@ export function LogsPage() {
             <TableHeader className="sticky top-0 bg-background z-10">
               <TableRow>
                 <TableHead className="w-[50px]">状态</TableHead>
-                <TableHead>API Key</TableHead>
-                <TableHead>账户</TableHead>
+                {isAdmin && <TableHead>用户</TableHead>}
+                {isAdmin && <TableHead>API Key</TableHead>}
+                {isAdmin && <TableHead>账户</TableHead>}
                 <TableHead>模型</TableHead>
                 <TableHead>目标模型</TableHead>
                 <TableHead className="text-right">输入</TableHead>
@@ -80,18 +84,25 @@ export function LogsPage() {
               {logs.map((log) => (
                 <TableRow key={log.id} className="cursor-pointer hover:bg-muted/50">
                   <TableCell>{getStatusIcon(log.status)}</TableCell>
-                  <TableCell className="max-w-[120px] truncate">
-                    <span className="font-medium text-sm">
-                      {log.apiKeyName || log.apiKeyId.slice(-8)}
-                    </span>
-                  </TableCell>
-                  <TableCell className="max-w-[150px] truncate">
-                    {log.accountName ? (
-                      <span className="rounded bg-purple-100 px-2 py-0.5 text-xs text-purple-700 dark:bg-purple-900/30 dark:text-purple-400">
-                        {log.accountName}
+                  {isAdmin && (
+                    <TableCell className="max-w-[120px] truncate">
+                      <span className="font-medium text-sm">
+                        {log.userName || log.userId.slice(-8)}
                       </span>
-                    ) : '-'}
-                  </TableCell>
+                    </TableCell>
+                  )}
+                  {isAdmin && (
+                    <TableCell className="max-w-[120px] truncate">
+                      <span className="font-medium text-sm">
+                        {log.apiKeyName || log.apiKeyId.slice(-8)}
+                      </span>
+                    </TableCell>
+                  )}
+                  {isAdmin && (
+                    <TableCell className="max-w-[150px] truncate text-sm">
+                      {log.accountName || '-'}
+                    </TableCell>
+                  )}
                   <TableCell className="font-mono text-sm">
                     {log.model || '-'}
                   </TableCell>
@@ -110,18 +121,8 @@ export function LogsPage() {
                   <TableCell className="text-right tabular-nums text-muted-foreground">
                     {formatDuration(log.durationMs)}
                   </TableCell>
-                  <TableCell className="text-center">
-                    {log.statusCode && (
-                      <span
-                        className={`rounded px-2 py-0.5 text-xs ${
-                          log.statusCode < 400
-                            ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400'
-                            : 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400'
-                        }`}
-                      >
-                        {log.statusCode}
-                      </span>
-                    )}
+                  <TableCell className="text-center tabular-nums">
+                    {log.statusCode || '-'}
                   </TableCell>
                   <TableCell className="text-sm text-muted-foreground">
                     {new Date(log.createdAt).toLocaleString()}
