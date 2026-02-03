@@ -277,27 +277,10 @@ export class ProxyService {
   ): Promise<void> {
     let lastError: Error | null = null;
     let currentAccount = initialAccount;
+    const triedAccountIds = new Set<string>([initialAccount.id]);
+    let retryCount = 0;
 
-    for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
-      const isRetry = attempt > 0;
-
-      if (isRetry) {
-        logger.info(
-          { attempt, accountId: currentAccount.id },
-          'Retrying proxy request'
-        );
-
-        // 尝试选择新账号
-        const newAccount = await accountSelector.selectAccount(context.targetModel);
-        if (newAccount && newAccount.id !== currentAccount.id) {
-          currentAccount = newAccount;
-          logger.info(
-            { newAccountId: newAccount.id, platform: newAccount.platform },
-            'Switched to new account for retry'
-          );
-        }
-      }
-
+    while (true) {
       try {
         // 根据平台类型选择不同的执行方法
         if (currentAccount.platform === 'kiro') {
@@ -327,9 +310,33 @@ export class ProxyService {
             error.message
           );
 
-          if (!canRetry || attempt >= MAX_RETRIES) {
+          if (!canRetry) {
             throw error;
           }
+
+          const allowRetryAll = error.statusCode === 429;
+          if (!allowRetryAll && retryCount >= MAX_RETRIES) {
+            throw error;
+          }
+
+          // 选择下一个账号（排除已尝试）
+          const nextAccount = await accountSelector.selectAccountWithOptions(
+            context.targetModel,
+            { excludeIds: Array.from(triedAccountIds) }
+          );
+          if (!nextAccount) {
+            throw error;
+          }
+          currentAccount = nextAccount;
+          triedAccountIds.add(nextAccount.id);
+          if (!allowRetryAll) {
+            retryCount += 1;
+          }
+          logger.info(
+            { newAccountId: nextAccount.id, platform: nextAccount.platform },
+            'Switched to new account for retry'
+          );
+          continue;
         } else {
           throw error;
         }

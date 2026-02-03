@@ -11,14 +11,21 @@
 
 import type { AccountWithQuotas } from '../accounts/accounts.repository.js';
 import { accountsRepository } from '../accounts/accounts.repository.js';
+import { accountsService } from '../accounts/accounts.service.js';
 import { antigravityService } from '../accounts/platforms/antigravity.service.js';
 import { kiroService } from '../accounts/platforms/kiro.service.js';
 import type { SelectedAccount } from './types.js';
 import { logger } from '../../lib/logger.js';
 import { AccountRoundRobin } from './account-round-robin.js';
+import { redis, cacheKeys } from '../../lib/redis.js';
 
 // Token 提前刷新时间 (60 秒)
 const TOKEN_REFRESH_BUFFER_MS = 60 * 1000;
+const RATE_LIMIT_COOLDOWN_SEC = 60;
+
+interface SelectAccountOptions {
+  excludeIds?: string[];
+}
 
 export class AccountSelector {
   /**
@@ -34,6 +41,13 @@ export class AccountSelector {
    */
   async selectAccount(targetModel: string): Promise<SelectedAccount | null> {
     // 查找符合条件的账号
+    return this.selectAccountWithOptions(targetModel);
+  }
+
+  async selectAccountWithOptions(
+    targetModel: string,
+    options: SelectAccountOptions = {}
+  ): Promise<SelectedAccount | null> {
     const accounts = await accountsRepository.findAvailableForModel(targetModel);
 
     if (accounts.length === 0) {
@@ -41,13 +55,21 @@ export class AccountSelector {
       return null;
     }
 
+    const excludeSet = new Set(options.excludeIds ?? []);
+    const cooldownFiltered = await this.filterAccountsByCooldown(accounts, excludeSet);
+
+    if (cooldownFiltered.length === 0) {
+      logger.warn({ targetModel }, 'No available accounts after cooldown filter');
+      return null;
+    }
+
     // 获取轮询起始索引
-    const startIndex = await AccountRoundRobin.getNextIndex('global', accounts.length);
+    const startIndex = await AccountRoundRobin.getNextIndex('global', cooldownFiltered.length);
 
     // 从起始索引开始尝试各个账号
-    for (let i = 0; i < accounts.length; i++) {
-      const index = (startIndex + i) % accounts.length;
-      const account = accounts[index];
+    for (let i = 0; i < cooldownFiltered.length; i++) {
+      const index = (startIndex + i) % cooldownFiltered.length;
+      const account = cooldownFiltered[index];
 
       try {
         const selected = await this.prepareAccount(account);
@@ -67,7 +89,7 @@ export class AccountSelector {
       }
     }
 
-    logger.error({ targetModel, accountCount: accounts.length }, 'All accounts failed');
+    logger.error({ targetModel, accountCount: cooldownFiltered.length }, 'All accounts failed');
     return null;
   }
 
@@ -265,6 +287,8 @@ export class AccountSelector {
       case 429:
         // 配额耗尽，可以重试其他账号
         logger.warn({ accountId, statusCode }, 'Account rate limited');
+        await this.markAccountCooldown(accountId);
+        this.refreshQuotaAsync(accountId);
         return true;
 
       case 401:
@@ -281,6 +305,46 @@ export class AccountSelector {
         // 其他错误，可以重试
         return statusCode >= 500;
     }
+  }
+
+  private async filterAccountsByCooldown(
+    accounts: AccountWithQuotas[],
+    excludeSet: Set<string>
+  ): Promise<AccountWithQuotas[]> {
+    const results = await Promise.all(
+      accounts.map(async (account) => {
+        if (excludeSet.has(account.id)) {
+          return null;
+        }
+        const inCooldown = await this.isAccountInCooldown(account.id);
+        return inCooldown ? null : account;
+      })
+    );
+    return results.filter((account): account is AccountWithQuotas => Boolean(account));
+  }
+
+  private async isAccountInCooldown(accountId: string): Promise<boolean> {
+    try {
+      const exists = await redis.exists(cacheKeys.accountCooldown(accountId));
+      return exists === 1;
+    } catch (error) {
+      logger.warn({ accountId, error }, 'Failed to check account cooldown');
+      return false;
+    }
+  }
+
+  private async markAccountCooldown(accountId: string): Promise<void> {
+    try {
+      await redis.setex(cacheKeys.accountCooldown(accountId), RATE_LIMIT_COOLDOWN_SEC, '1');
+    } catch (error) {
+      logger.warn({ accountId, error }, 'Failed to set account cooldown');
+    }
+  }
+
+  private refreshQuotaAsync(accountId: string): void {
+    accountsService.refreshQuota(accountId).catch((error) => {
+      logger.warn({ accountId, error }, 'Failed to refresh quota after rate limit');
+    });
   }
 
   /**

@@ -29,6 +29,7 @@ export const cacheKeys = {
   rateLimit: (userId: string, window: number) => `ratelimit:${userId}:${window}`,
   account: (id: string) => `account:${id}`,
   accountQuota: (accountId: string) => `account:quota:${accountId}`,
+  accountCooldown: (accountId: string) => `account:cooldown:${accountId}`,
   // 签名缓存
   toolSignature: (toolId: string) => `proxy:tool_sig:${toolId}`,
   sessionSignature: (sessionId: string) => `proxy:session_sig:${sessionId}`,
