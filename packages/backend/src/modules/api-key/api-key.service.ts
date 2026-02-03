@@ -218,6 +218,20 @@ export class ApiKeyService {
 
     return result;
   }
+
+  async getFullKeyAdmin(id: string): Promise<string> {
+    const apiKey = await apiKeyRepository.findById(id);
+    if (!apiKey) {
+      throw new AppError(404, ErrorCodes.API_KEY_NOT_FOUND, 'API key not found');
+    }
+
+    const fullKey = await apiKeyRepository.getFullKey(id);
+    if (!fullKey) {
+      throw new AppError(400, ErrorCodes.VALIDATION_ERROR, 'Full key not available for this API key');
+    }
+
+    return fullKey;
+  }
 }
 
 export const apiKeyService = new ApiKeyService();

@@ -16,7 +16,25 @@ import { CreateApiKeyDialog, EditApiKeyDialog, ApiKeyStatsCard } from './compone
 import { useAuthStore } from '@/stores/auth.store';
 import type { ApiKeyWithMappingsResponse, ApiKeyWithUserResponse } from '@claude-code-router/shared';
 
-function CopyKeyButton({ apiKeyId }: { apiKeyId: string }) {
+// 兼容 HTTP 环境的复制函数
+async function copyToClipboard(text: string): Promise<void> {
+  // 优先使用 Clipboard API（需要 HTTPS 或 localhost）
+  if (navigator.clipboard && window.isSecureContext) {
+    await navigator.clipboard.writeText(text);
+    return;
+  }
+  // Fallback: 使用 execCommand（支持 HTTP）
+  const textarea = document.createElement('textarea');
+  textarea.value = text;
+  textarea.style.position = 'fixed';
+  textarea.style.left = '-9999px';
+  document.body.appendChild(textarea);
+  textarea.select();
+  document.execCommand('copy');
+  document.body.removeChild(textarea);
+}
+
+function CopyKeyButton({ apiKeyId, isAdmin = false }: { apiKeyId: string; isAdmin?: boolean }) {
   const [status, setStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
 
   const handleCopy = async (e: React.MouseEvent) => {
@@ -25,10 +43,12 @@ function CopyKeyButton({ apiKeyId }: { apiKeyId: string }) {
 
     setStatus('loading');
     try {
+      const endpoint = isAdmin ? `/api-keys/admin/${apiKeyId}/key` : `/api-keys/${apiKeyId}/key`;
       const response = await api.get<{ success: boolean; data: { key: string } }>(
-        `/api-keys/${apiKeyId}/key`
+        endpoint,
+        { headers: { 'Cache-Control': 'no-cache' } }
       );
-      await navigator.clipboard.writeText(response.data.key);
+      await copyToClipboard(response.data.key);
       setStatus('success');
       setTimeout(() => setStatus('idle'), 2000);
     } catch {
@@ -159,7 +179,7 @@ export function ApiKeysPage() {
                         <code className="rounded bg-muted px-2 py-1 text-sm">
                           {key.keyPrefix}...
                         </code>
-                        <CopyKeyButton apiKeyId={key.id} />
+                        <CopyKeyButton apiKeyId={key.id} isAdmin={isAdmin} />
                       </div>
                     </TableCell>
                     <TableCell>

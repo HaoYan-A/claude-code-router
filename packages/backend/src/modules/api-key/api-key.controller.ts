@@ -97,6 +97,11 @@ export class ApiKeyController {
     const result = await apiKeyService.getStatsAdmin(req.params.id, timeRange, includeDaily);
     res.json({ success: true, data: result });
   }
+
+  async getFullKeyAdmin(req: Request, res: Response): Promise<void> {
+    const key = await apiKeyService.getFullKeyAdmin(req.params.id);
+    res.json({ success: true, data: { key } });
+  }
 }
 
 export const apiKeyController = new ApiKeyController();

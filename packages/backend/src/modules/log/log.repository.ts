@@ -36,6 +36,7 @@ export class LogRepository {
         orderBy: { createdAt: 'desc' },
         select: {
           id: true,
+          userId: true,
           apiKeyId: true,
           accountId: true,
           model: true,
@@ -48,6 +49,11 @@ export class LogRepository {
           statusCode: true,
           status: true,
           createdAt: true,
+          user: {
+            select: {
+              githubUsername: true,
+            },
+          },
           apiKey: {
             select: {
               name: true,
@@ -66,6 +72,8 @@ export class LogRepository {
 
     const data: RequestLogSummary[] = rawData.map((log) => ({
       id: log.id,
+      userId: log.userId,
+      userName: log.user?.githubUsername ?? null,
       apiKeyId: log.apiKeyId,
       apiKeyName: log.apiKey?.name ?? null,
       model: log.model,

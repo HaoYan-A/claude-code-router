@@ -85,6 +85,13 @@ router.get(
   asyncHandler((req, res) => apiKeyController.getStatsAdmin(req, res))
 );
 
+router.get(
+  '/admin/:id/key',
+  adminMiddleware,
+  validate(idParamSchema, 'params'),
+  asyncHandler((req, res) => apiKeyController.getFullKeyAdmin(req, res))
+);
+
 router.patch(
   '/admin/:id',
   adminMiddleware,
