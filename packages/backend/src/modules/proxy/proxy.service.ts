@@ -43,7 +43,7 @@ import {
   KIRO_GENERATE_PATH,
 } from './channels/kiro/index.js';
 import { getKiroHeaders } from '../accounts/platforms/kiro.service.js';
-import type { ClaudeRequest, ProxyContext, ModelSlot } from './types.js';
+import type { ClaudeRequest, ProxyContext, ModelSlot, MessageContent, SystemPrompt } from './types.js';
 import type { SelectedAccount } from './types.js';
 
 // 最大重试次数
@@ -77,6 +77,55 @@ function sanitizeHeaders(headers: Record<string, string>): Record<string, string
     }
   }
   return sanitized;
+}
+
+function extractSystemText(system?: SystemPrompt): string {
+  if (!system) return '';
+  if (typeof system === 'string') return system;
+  return system
+    .filter((block) => block.type === 'text')
+    .map((block) => block.text)
+    .join('\n\n');
+}
+
+function extractTextFromContent(content: MessageContent): string {
+  if (typeof content === 'string') return content;
+  const parts: string[] = [];
+  for (const block of content) {
+    if (block.type === 'text' && block.text) {
+      parts.push(block.text);
+      continue;
+    }
+    if (block.type === 'tool_result') {
+      const toolContent = (block.content ?? '') as unknown;
+      if (typeof toolContent === 'string') {
+        parts.push(toolContent);
+      } else if (Array.isArray(toolContent)) {
+        const text = toolContent
+          .map((item: unknown) => {
+            if (typeof item === 'object' && item !== null) {
+              const typedItem = item as { type?: string; text?: string };
+              if (typedItem.type === 'text' && typedItem.text) {
+                return typedItem.text;
+              }
+            }
+            return '';
+          })
+          .filter(Boolean)
+          .join('\n');
+        if (text) parts.push(text);
+      }
+      continue;
+    }
+    if (block.type === 'tool_use') {
+      const inputText = typeof block.input === 'string'
+        ? block.input
+        : JSON.stringify(block.input ?? {});
+      if (inputText) parts.push(inputText);
+      continue;
+    }
+  }
+  return parts.join('\n');
 }
 
 export class ProxyService {
@@ -499,6 +548,7 @@ export class ProxyService {
   ): Promise<void> {
     const isStream = claudeReq.stream === true;
     const region = account.kiroRegion || 'us-east-1';
+    const inputTokens = this.estimateInputTokens(claudeReq);
 
     // 转换请求
     const { body: kiroBody, kiroModelId } = convertClaudeToKiro(claudeReq, {
@@ -588,6 +638,7 @@ export class ProxyService {
           sessionId: context.sessionId,
           modelName: kiroModelId,
           messageCount: context.messageCount,
+          inputTokens,
         }
       );
 
@@ -626,6 +677,7 @@ export class ProxyService {
         sessionId: context.sessionId,
         modelName: kiroModelId,
         messageCount: context.messageCount,
+        inputTokens,
       });
 
       res.setHeader('X-Request-Id', context.logId);
@@ -693,6 +745,21 @@ export class ProxyService {
 
     // 否则生成新的
     return `session-${uuidv4()}`;
+  }
+
+  private estimateInputTokens(req: ClaudeRequest): number {
+    const parts: string[] = [];
+    const systemText = extractSystemText(req.system);
+    if (systemText) parts.push(systemText);
+
+    for (const msg of req.messages) {
+      const text = extractTextFromContent(msg.content);
+      if (text) parts.push(text);
+    }
+
+    const totalText = parts.join('\n');
+    if (!totalText) return 0;
+    return Math.ceil(totalText.length / 4);
   }
 }
 

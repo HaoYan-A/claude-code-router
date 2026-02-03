@@ -69,9 +69,12 @@ export function convertClaudeToKiro(
   // 3. 转换工具
   const kiroTools = convertTools(claudeReq.tools);
 
+  // 3.1 预处理消息（assistant 结尾补 Continue、工具结果兼容）
+  const normalizedMessages = normalizeMessages(claudeReq.messages, kiroTools);
+
   // 4. 构建历史消息和当前消息
   const { history, currentMessage, toolResults } = buildMessages(
-    claudeReq.messages,
+    normalizedMessages,
     systemPrompt,
     kiroModelId,
     kiroTools,
@@ -171,6 +174,98 @@ function extractSystemPrompt(system?: SystemPrompt): string {
     .join('\n\n');
 }
 
+// ==================== 消息预处理 ====================
+
+function normalizeMessages(messages: Message[], tools: KiroTool[]): Message[] {
+  const normalized: Message[] = messages.map((msg) => ({ ...msg, content: msg.content }));
+
+  // 如果最后一条是 assistant，追加 Continue 作为当前 user 消息
+  if (normalized.length > 0 && normalized[normalized.length - 1].role === 'assistant') {
+    normalized.push({ role: 'user', content: 'Continue' });
+  }
+
+  // 无 tools：将所有 tool_use/tool_result 转为文本
+  if (tools.length === 0) {
+    return normalized.map((msg) => ({
+      ...msg,
+      content: convertToolBlocksToText(msg.content, { toolUse: true, toolResult: true }),
+    }));
+  }
+
+  // 有 tools：仅处理缺少 preceding tool_use 的 tool_result
+  const processed: Message[] = [];
+  for (const msg of normalized) {
+    if (msg.role === 'user' && hasToolResultBlock(msg.content)) {
+      const prev = processed[processed.length - 1];
+      const hasPrevToolUse = prev && prev.role === 'assistant' && hasToolUseBlock(prev.content);
+      if (!hasPrevToolUse) {
+        processed.push({
+          ...msg,
+          content: convertToolBlocksToText(msg.content, { toolUse: false, toolResult: true }),
+        });
+        continue;
+      }
+    }
+    processed.push(msg);
+  }
+
+  return processed;
+}
+
+function hasToolUseBlock(content: MessageContent): boolean {
+  if (typeof content === 'string') return false;
+  return content.some((block) => block.type === 'tool_use');
+}
+
+function hasToolResultBlock(content: MessageContent): boolean {
+  if (typeof content === 'string') return false;
+  return content.some((block) => block.type === 'tool_result');
+}
+
+function convertToolBlocksToText(
+  content: MessageContent,
+  options: { toolUse: boolean; toolResult: boolean }
+): MessageContent {
+  if (typeof content === 'string') {
+    return content;
+  }
+
+  const blocks: ContentBlock[] = [];
+  for (const block of content) {
+    if (options.toolUse && block.type === 'tool_use') {
+      const toolText = formatToolUseText(block);
+      if (toolText) {
+        blocks.push({ type: 'text', text: toolText });
+      }
+      continue;
+    }
+    if (options.toolResult && block.type === 'tool_result') {
+      const resultText = formatToolResultText(block);
+      if (resultText) {
+        blocks.push({ type: 'text', text: resultText });
+      }
+      continue;
+    }
+    blocks.push(block);
+  }
+
+  return blocks;
+}
+
+function formatToolUseText(block: ContentBlock & { type: 'tool_use' }): string {
+  const inputText = typeof block.input === 'string'
+    ? block.input
+    : JSON.stringify(block.input ?? {});
+  const name = block.name || 'tool';
+  return `[Tool Call (${name})]\n${inputText || ''}`.trim();
+}
+
+function formatToolResultText(block: ContentBlock & { type: 'tool_result' }): string {
+  const contentText = toolResultContentToText(block.content, block.is_error, true);
+  const label = block.tool_use_id ? `[Tool Result (${block.tool_use_id})]` : '[Tool Result]';
+  return `${label}\n${contentText}`.trim();
+}
+
 // ==================== 消息构建 ====================
 
 interface BuildMessagesResult {
@@ -249,9 +344,15 @@ function buildMessages(
   // 构建当前消息
   let currentContent = lastUserContent;
 
-  // 注入 system prompt 到第一条消息（如果有 system prompt 且历史为空）
-  if (systemPrompt && history.length === 0) {
-    currentContent = `${systemPrompt}\n\n${currentContent}`;
+  // 注入 system prompt（优先注入到第一条历史 user，否则注入到 current）
+  if (systemPrompt) {
+    const firstUserIndex = history.findIndex((entry) => 'userInputMessage' in entry);
+    if (firstUserIndex !== -1) {
+      const firstUser = history[firstUserIndex].userInputMessage;
+      firstUser.content = `${systemPrompt}\n\n${firstUser.content || EMPTY_CONTENT_PLACEHOLDER}`;
+    } else {
+      currentContent = `${systemPrompt}\n\n${currentContent}`;
+    }
   }
 
   // 注入 thinking 标签
@@ -340,16 +441,17 @@ function processUserMessage(content: MessageContent): ProcessUserResult {
   };
 }
 
-/**
- * 转换 tool_result 为 Kiro 格式
- */
-function convertToolResult(block: ContentBlock & { type: 'tool_result' }): KiroToolResult {
+function toolResultContentToText(
+  content: unknown,
+  isError?: boolean,
+  forTextConversion = false
+): string {
   let text = '';
 
-  if (typeof block.content === 'string') {
-    text = block.content;
-  } else if (Array.isArray(block.content)) {
-    text = block.content
+  if (typeof content === 'string') {
+    text = content;
+  } else if (Array.isArray(content)) {
+    text = content
       .map((item: unknown) => {
         if (typeof item === 'object' && item !== null) {
           const typedItem = item as { type?: string; text?: string };
@@ -364,16 +466,27 @@ function convertToolResult(block: ContentBlock & { type: 'tool_result' }): KiroT
       })
       .filter(Boolean)
       .join('\n');
-  } else if (block.content) {
-    text = JSON.stringify(block.content);
+  } else if (content) {
+    text = JSON.stringify(content);
   }
 
-  // 空结果处理
   if (!text.trim()) {
-    text = block.is_error
+    if (forTextConversion) {
+      return '(empty result)';
+    }
+    return isError
       ? 'Tool execution failed with no output.'
       : 'Command executed successfully.';
   }
+
+  return text;
+}
+
+/**
+ * 转换 tool_result 为 Kiro 格式
+ */
+function convertToolResult(block: ContentBlock & { type: 'tool_result' }): KiroToolResult {
+  const text = toolResultContentToText(block.content, block.is_error);
 
   return {
     toolUseId: block.tool_use_id,
@@ -481,7 +594,12 @@ function truncateToolName(name: string): string {
   if (name.length <= MAX_TOOL_NAME_LENGTH) {
     return name;
   }
-  return name.substring(0, MAX_TOOL_NAME_LENGTH);
+  const truncated = name.substring(0, MAX_TOOL_NAME_LENGTH);
+  logger.warn(
+    { originalName: name, truncatedName: truncated, maxLength: MAX_TOOL_NAME_LENGTH },
+    'Tool name exceeded max length, truncated'
+  );
+  return truncated;
 }
 
 /**

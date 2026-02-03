@@ -19,6 +19,7 @@ export interface KiroStreamingOptions {
   sessionId: string;
   modelName: string;
   messageCount: number;
+  inputTokens?: number;
 }
 
 export interface KiroSSEStreamResult {
@@ -471,7 +472,7 @@ export async function handleKiroSSEStream(
   const reader = readable.getReader();
 
   let buffer = '';
-  let inputTokens = 0;
+  let inputTokens = options.inputTokens ?? 0;
   let outputTokens = 0;
   let finishReason: string | undefined;
 
@@ -582,6 +583,7 @@ export interface KiroNonStreamingOptions {
   sessionId: string;
   modelName: string;
   messageCount: number;
+  inputTokens?: number;
 }
 
 /**
@@ -674,7 +676,7 @@ export async function transformKiroResponse(
     .join('');
 
   const usage: Usage = {
-    input_tokens: 0, // 实际应从 API 获取
+    input_tokens: options.inputTokens ?? 0, // 近似估算
     output_tokens: Math.ceil(totalText.length / 4),
   };
 
