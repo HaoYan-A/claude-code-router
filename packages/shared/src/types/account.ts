@@ -115,23 +115,13 @@ export interface PlatformModelsResponse {
   [platform: string]: PlatformModel[];
 }
 
-// Kiro 导入相关类型
-export interface KiroAuthToken {
-  accessToken: string;
+// Kiro 导入相关类型（简化版：只需 refreshToken，自动刷新获取 accessToken）
+export interface ImportKiroAccountInput {
   refreshToken: string;
-  expiresAt: string;
-  clientIdHash: string;
-  region: string;
-}
-
-export interface KiroClientConfig {
   clientId: string;
   clientSecret: string;
-}
-
-export interface ImportKiroAccountInput {
-  authToken: KiroAuthToken;
-  clientConfig: KiroClientConfig;
+  clientIdHash: string; // 用作 platformId
+  region: string;
   name?: string;
   priority?: number;
   schedulable?: boolean;

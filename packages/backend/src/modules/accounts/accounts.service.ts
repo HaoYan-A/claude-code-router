@@ -242,45 +242,48 @@ export class AccountsService {
   }
 
   /**
-   * 导入 Kiro 账号
+   * 导入 Kiro 账号（自动刷新 Token）
    */
   async importKiroAccount(input: ImportKiroAccountSchema) {
-    const { authToken, clientConfig, name, priority = 50, schedulable = true } = input;
+    const { refreshToken, clientId, clientSecret, clientIdHash, region, name, priority = 50, schedulable = true } = input;
 
     // 1. 检查是否已存在（使用 clientIdHash 作为 platformId）
-    const existing = await accountsRepository.findByPlatformId('kiro', authToken.clientIdHash);
+    const existing = await accountsRepository.findByPlatformId('kiro', clientIdHash);
     if (existing) {
       throw new AppError(409, ErrorCodes.ACCOUNT_ALREADY_EXISTS, 'Kiro account already exists');
     }
 
-    // 2. 验证 Token 是否有效
-    const validation = await kiroService.validateAccount(authToken.accessToken, authToken.region);
+    // 2. 使用 refreshToken 刷新获取 accessToken
+    const tokenResponse = await kiroService.refreshAccessToken(refreshToken, clientId, clientSecret, region);
+
+    // 3. 验证 Token 是否有效（获取模型列表）
+    const validation = await kiroService.validateAccount(tokenResponse.accessToken, region);
     if (!validation.valid) {
-      throw new AppError(400, ErrorCodes.ACCOUNT_AUTH_FAILED, 'Invalid Kiro access token');
+      throw new AppError(400, ErrorCodes.ACCOUNT_AUTH_FAILED, 'Invalid Kiro credentials');
     }
 
-    // 3. 创建账号
+    // 4. 创建账号
     const account = await accountsRepository.create({
       platform: 'kiro',
-      platformId: authToken.clientIdHash,
-      name: name ?? `Kiro-${authToken.clientIdHash.substring(0, 8)}`,
-      accessToken: authToken.accessToken,
-      refreshToken: authToken.refreshToken,
-      tokenExpiresAt: new Date(authToken.expiresAt),
-      kiroClientId: clientConfig.clientId,
-      kiroClientSecret: clientConfig.clientSecret,
-      kiroRegion: authToken.region,
+      platformId: clientIdHash,
+      name: name ?? `Kiro-${clientIdHash.substring(0, 8)}`,
+      accessToken: tokenResponse.accessToken,
+      refreshToken: tokenResponse.refreshToken || refreshToken,
+      tokenExpiresAt: new Date(Date.now() + tokenResponse.expiresIn * 1000),
+      kiroClientId: clientId,
+      kiroClientSecret: clientSecret,
+      kiroRegion: region,
       status: 'active',
       priority,
       schedulable,
     });
 
-    // 4. 保存模型额度（Kiro 按模型计算，暂时全部设为 100%）
+    // 5. 保存模型额度（Kiro 按模型计算，暂时全部设为 100%）
     for (const modelId of validation.models) {
       await accountsRepository.upsertQuota(account.id, modelId, 100, null);
     }
 
-    // 5. 重新获取带额度的账号
+    // 6. 重新获取带额度的账号
     const result = await accountsRepository.findById(account.id);
     return this.sanitizeAccount(result!);
   }
