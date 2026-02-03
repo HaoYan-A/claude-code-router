@@ -6,11 +6,13 @@
  * 2. 轮询策略：使用 Redis 原子计数实现负载均衡
  * 3. Token 刷新：提前 60 秒检查过期
  * 4. 失败处理：429 切换账号、401/403 标记错误
+ * 5. 支持多平台：Antigravity 和 Kiro
  */
 
 import type { AccountWithQuotas } from '../accounts/accounts.repository.js';
 import { accountsRepository } from '../accounts/accounts.repository.js';
 import { antigravityService } from '../accounts/platforms/antigravity.service.js';
+import { kiroService } from '../accounts/platforms/kiro.service.js';
 import type { SelectedAccount } from './types.js';
 import { logger } from '../../lib/logger.js';
 import { AccountRoundRobin } from './account-round-robin.js';
@@ -79,6 +81,19 @@ export class AccountSelector {
       return null;
     }
 
+    // 根据平台类型分发处理
+    if (account.platform === 'kiro') {
+      return this.prepareKiroAccount(account);
+    }
+
+    // 默认 Antigravity 平台
+    return this.prepareAntigravityAccount(account);
+  }
+
+  /**
+   * 准备 Antigravity 账号
+   */
+  private async prepareAntigravityAccount(account: AccountWithQuotas): Promise<SelectedAccount | null> {
     let accessToken = account.accessToken;
     let tokenExpiresAt = account.tokenExpiresAt;
 
@@ -89,10 +104,10 @@ export class AccountSelector {
       tokenExpiresAt.getTime() - Date.now() < TOKEN_REFRESH_BUFFER_MS;
 
     if (needsRefresh) {
-      logger.info({ accountId: account.id }, 'Refreshing access token');
+      logger.info({ accountId: account.id, platform: 'antigravity' }, 'Refreshing access token');
 
       try {
-        const tokenData = await antigravityService.refreshAccessToken(account.refreshToken);
+        const tokenData = await antigravityService.refreshAccessToken(account.refreshToken!);
 
         accessToken = tokenData.access_token;
         tokenExpiresAt = new Date(Date.now() + tokenData.expires_in * 1000);
@@ -126,10 +141,80 @@ export class AccountSelector {
 
     return {
       id: account.id,
+      platform: 'antigravity',
       accessToken: accessToken!,
       projectId,
-      refreshToken: account.refreshToken,
+      refreshToken: account.refreshToken!,
       tokenExpiresAt,
+    };
+  }
+
+  /**
+   * 准备 Kiro 账号
+   */
+  private async prepareKiroAccount(account: AccountWithQuotas): Promise<SelectedAccount | null> {
+    // 检查 Kiro 必要字段
+    if (!account.kiroClientId || !account.kiroClientSecret || !account.kiroRegion) {
+      logger.warn({ accountId: account.id }, 'Kiro account missing client credentials');
+      return null;
+    }
+
+    let accessToken = account.accessToken;
+    let tokenExpiresAt = account.tokenExpiresAt;
+    let refreshToken = account.refreshToken;
+
+    // 检查是否需要刷新 token
+    const needsRefresh =
+      !accessToken ||
+      !tokenExpiresAt ||
+      tokenExpiresAt.getTime() - Date.now() < TOKEN_REFRESH_BUFFER_MS;
+
+    if (needsRefresh) {
+      logger.info({ accountId: account.id, platform: 'kiro' }, 'Refreshing Kiro access token');
+
+      try {
+        const tokenData = await kiroService.refreshAccessToken(
+          account.refreshToken!,
+          account.kiroClientId,
+          account.kiroClientSecret,
+          account.kiroRegion
+        );
+
+        accessToken = tokenData.accessToken;
+        tokenExpiresAt = new Date(Date.now() + tokenData.expiresIn * 1000);
+        refreshToken = tokenData.refreshToken || account.refreshToken;
+
+        // 更新数据库
+        await accountsRepository.update(account.id, {
+          accessToken,
+          refreshToken,
+          tokenExpiresAt,
+          status: 'active',
+          errorMessage: null,
+        });
+
+        logger.info(
+          { accountId: account.id, expiresAt: tokenExpiresAt },
+          'Kiro access token refreshed'
+        );
+      } catch (error) {
+        // 刷新失败，标记账号状态
+        await this.markAccountError(account.id, error);
+        return null;
+      }
+    }
+
+    // Kiro 不需要 project ID，使用 region 代替
+    return {
+      id: account.id,
+      platform: 'kiro',
+      accessToken: accessToken!,
+      projectId: account.kiroRegion, // 使用 region 作为 projectId
+      refreshToken: refreshToken!,
+      tokenExpiresAt,
+      kiroClientId: account.kiroClientId,
+      kiroClientSecret: account.kiroClientSecret,
+      kiroRegion: account.kiroRegion,
     };
   }
 

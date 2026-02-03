@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Plus, RefreshCw, Loader2 } from 'lucide-react';
 import { useAccounts, useRefreshAllQuotas } from '@/lib/queries/accounts';
 import {
@@ -9,14 +10,17 @@ import {
   AddAccountDialog,
   EditAccountDialog,
 } from './components';
-import type { ThirdPartyAccount } from '@claude-code-router/shared';
+import type { ThirdPartyAccount, AccountPlatform } from '@claude-code-router/shared';
 
 export function AccountsPage() {
   const [showAddDialog, setShowAddDialog] = useState(false);
   const [editingAccount, setEditingAccount] = useState<ThirdPartyAccount | null>(null);
   const [selectedAccount, setSelectedAccount] = useState<ThirdPartyAccount | null>(null);
+  const [platformFilter, setPlatformFilter] = useState<AccountPlatform | 'all'>('all');
 
-  const { data, isLoading } = useAccounts();
+  const { data, isLoading } = useAccounts(
+    platformFilter === 'all' ? undefined : { platform: platformFilter }
+  );
   const refreshAllMutation = useRefreshAllQuotas();
 
   const accounts = data?.data.data ?? [];
@@ -51,7 +55,7 @@ export function AccountsPage() {
       {/* Header */}
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="text-3xl font-bold">Antigravity 账户</h1>
+          <h1 className="text-3xl font-bold">第三方账户</h1>
           <p className="text-muted-foreground mt-1">
             管理您的第三方 API 账户
           </p>
@@ -75,6 +79,19 @@ export function AccountsPage() {
           </Button>
         </div>
       </div>
+
+      {/* Platform Filter */}
+      <Tabs
+        value={platformFilter}
+        onValueChange={(v) => setPlatformFilter(v as AccountPlatform | 'all')}
+        className="mb-4"
+      >
+        <TabsList>
+          <TabsTrigger value="all">全部</TabsTrigger>
+          <TabsTrigger value="antigravity">Antigravity</TabsTrigger>
+          <TabsTrigger value="kiro">Kiro</TabsTrigger>
+        </TabsList>
+      </Tabs>
 
       {/* Summary Stats */}
       <AccountSummaryStats accounts={accounts} />

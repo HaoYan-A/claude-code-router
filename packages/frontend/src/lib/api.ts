@@ -1,5 +1,6 @@
 import { API_PREFIX } from '@claude-code-router/shared';
 import { useAuthStore } from '@/stores/auth.store';
+import { ApiError, type ApiErrorResponse } from './errors';
 
 const BASE_URL = API_PREFIX;
 
@@ -37,7 +38,11 @@ async function request<T>(endpoint: string, options: RequestOptions = {}): Promi
       }
       useAuthStore.getState().logout();
     }
-    throw new Error(data.error?.message || 'Request failed');
+    // 抛出 ApiError，保留完整错误信息（code + message + details）
+    if (data.error) {
+      throw ApiError.fromResponse(data as ApiErrorResponse, response.status);
+    }
+    throw new ApiError('UNKNOWN_ERROR', 'Request failed', undefined, response.status);
   }
 
   return data;

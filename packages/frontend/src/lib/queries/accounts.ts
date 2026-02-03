@@ -9,6 +9,7 @@ import type {
   OAuthExchangeInput,
   AccountListQuery,
   PlatformModelsResponse,
+  ImportKiroAccountInput,
 } from '@claude-code-router/shared';
 
 interface ApiResponse<T> {
@@ -159,6 +160,18 @@ export function useRefreshToken() {
       api.post<ApiResponse<ThirdPartyAccount>>(`/accounts/${id}/token/refresh`),
     onSuccess: (_, id) => {
       queryClient.invalidateQueries({ queryKey: ['accounts', id] });
+      queryClient.invalidateQueries({ queryKey: ['accounts'] });
+    },
+  });
+}
+
+// 导入 Kiro 账号
+export function useImportKiroAccount() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (data: ImportKiroAccountInput) =>
+      api.post<ApiResponse<ThirdPartyAccount>>('/accounts/kiro/import', data),
+    onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['accounts'] });
     },
   });
