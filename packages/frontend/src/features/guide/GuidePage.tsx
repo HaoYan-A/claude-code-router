@@ -71,7 +71,7 @@ export function GuidePage() {
                   <p className="text-sm font-medium mb-2">临时设置（当前终端会话有效）</p>
                   <CodeBlock
                     code={`export ANTHROPIC_BASE_URL="${baseUrl}"
-export ANTHROPIC_API_KEY="${envVarPlaceholder}"`}
+export ANTHROPIC_AUTH_TOKEN="${envVarPlaceholder}"`}
                   />
                 </div>
 
@@ -79,22 +79,8 @@ export ANTHROPIC_API_KEY="${envVarPlaceholder}"`}
                   <p className="text-sm font-medium mb-2">永久设置（添加到 ~/.zshrc 或 ~/.bashrc）</p>
                   <CodeBlock
                     code={`echo 'export ANTHROPIC_BASE_URL="${baseUrl}"' >> ~/.zshrc
-echo 'export ANTHROPIC_API_KEY="${envVarPlaceholder}"' >> ~/.zshrc
+echo 'export ANTHROPIC_AUTH_TOKEN="${envVarPlaceholder}"' >> ~/.zshrc
 source ~/.zshrc`}
-                  />
-                </div>
-
-                <div>
-                  <p className="text-sm font-medium mb-2">VSCode 插件配置</p>
-                  <p className="text-sm text-muted-foreground mb-2">
-                    在 VSCode 设置 (settings.json) 中添加：
-                  </p>
-                  <CodeBlock
-                    title="settings.json"
-                    code={`{
-  "claude-code.apiBaseUrl": "${baseUrl}",
-  "claude-code.apiKey": "${envVarPlaceholder}"
-}`}
                   />
                 </div>
 
@@ -102,7 +88,7 @@ source ~/.zshrc`}
                   <p className="text-sm font-medium mb-2">验证配置</p>
                   <CodeBlock
                     code={`echo $ANTHROPIC_BASE_URL
-echo $ANTHROPIC_API_KEY`}
+echo $ANTHROPIC_AUTH_TOKEN`}
                   />
                 </div>
               </div>
@@ -179,7 +165,7 @@ claude`} />
                   <p className="text-sm font-medium mb-2">临时设置（PowerShell 当前会话）</p>
                   <CodeBlock
                     code={`$env:ANTHROPIC_BASE_URL = "${baseUrl}"
-$env:ANTHROPIC_API_KEY = "${envVarPlaceholder}"`}
+$env:ANTHROPIC_AUTH_TOKEN = "${envVarPlaceholder}"`}
                   />
                 </div>
 
@@ -187,7 +173,7 @@ $env:ANTHROPIC_API_KEY = "${envVarPlaceholder}"`}
                   <p className="text-sm font-medium mb-2">永久设置（系统环境变量）</p>
                   <CodeBlock
                     code={`[Environment]::SetEnvironmentVariable("ANTHROPIC_BASE_URL", "${baseUrl}", "User")
-[Environment]::SetEnvironmentVariable("ANTHROPIC_API_KEY", "${envVarPlaceholder}", "User")`}
+[Environment]::SetEnvironmentVariable("ANTHROPIC_AUTH_TOKEN", "${envVarPlaceholder}", "User")`}
                   />
                   <p className="text-sm text-muted-foreground mt-2">
                     设置后需要重新打开 PowerShell 或终端才能生效
@@ -195,24 +181,10 @@ $env:ANTHROPIC_API_KEY = "${envVarPlaceholder}"`}
                 </div>
 
                 <div>
-                  <p className="text-sm font-medium mb-2">VSCode 插件配置</p>
-                  <p className="text-sm text-muted-foreground mb-2">
-                    在 VSCode 设置 (settings.json) 中添加：
-                  </p>
-                  <CodeBlock
-                    title="settings.json"
-                    code={`{
-  "claude-code.apiBaseUrl": "${baseUrl}",
-  "claude-code.apiKey": "${envVarPlaceholder}"
-}`}
-                  />
-                </div>
-
-                <div>
                   <p className="text-sm font-medium mb-2">验证配置</p>
                   <CodeBlock
                     code={`$env:ANTHROPIC_BASE_URL
-$env:ANTHROPIC_API_KEY`}
+$env:ANTHROPIC_AUTH_TOKEN`}
                   />
                 </div>
               </div>
