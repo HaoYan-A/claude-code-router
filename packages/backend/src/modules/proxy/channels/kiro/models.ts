@@ -16,8 +16,6 @@ export interface KiroRequest {
 }
 
 export interface KiroConversationState {
-  agentContinuationId: string;  // UUID
-  agentTaskType: 'vibe';
   chatTriggerType: 'MANUAL' | 'AUTO';
   conversationId: string;
   currentMessage: KiroCurrentMessage;
@@ -60,9 +58,7 @@ export interface KiroTool {
 
 export interface KiroToolResult {
   toolUseId: string;
-  content: {
-    text: string;
-  };
+  content: Array<{ text: string }>;  // 注意：是数组，不是对象
   status: 'success' | 'error';
 }
 
@@ -74,14 +70,14 @@ export type KiroHistoryMessage =
 
 export interface KiroAssistantResponseMessage {
   content: string;
-  messageId: string;
+  messageId?: string;  // Kiro API 不需要此字段
   toolUses?: KiroToolUse[];
 }
 
 export interface KiroToolUse {
   toolUseId: string;
   name: string;
-  input: string;  // JSON string
+  input: object;  // 对象，不是 JSON 字符串
 }
 
 // ==================== Kiro SSE 响应类型 ====================

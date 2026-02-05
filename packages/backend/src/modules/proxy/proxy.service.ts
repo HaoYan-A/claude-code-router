@@ -275,7 +275,6 @@ export class ProxyService {
     res: Response,
     initialAccount: SelectedAccount
   ): Promise<void> {
-    let lastError: Error | null = null;
     let currentAccount = initialAccount;
     const triedAccountIds = new Set<string>([initialAccount.id]);
     let retryCount = 0;
@@ -295,13 +294,11 @@ export class ProxyService {
             claudeReq,
             { ...context, platform: 'antigravity', accountId: currentAccount.id, accessToken: currentAccount.accessToken, projectId: currentAccount.projectId },
             res,
-            isRetry
+            retryCount > 0
           );
         }
         return; // 成功则返回
       } catch (error) {
-        lastError = error instanceof Error ? error : new Error('Unknown error');
-
         // 判断是否可重试
         if (error instanceof ProxyError) {
           const canRetry = await accountSelector.handleRequestFailure(
@@ -342,8 +339,6 @@ export class ProxyService {
         }
       }
     }
-
-    throw lastError || new Error('Max retries exceeded');
   }
 
   /**
@@ -621,6 +616,7 @@ export class ProxyService {
           accountId: context.accountId,
           url,
           kiroModelId,
+          fullRequestBody: upstreamRequestBodyStr, // 添加完整请求体便于调试
         },
         'Kiro API error'
       );

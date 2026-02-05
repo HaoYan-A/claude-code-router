@@ -2,16 +2,390 @@
  * Kiro SSE → Claude SSE 响应处理器
  *
  * 核心功能：
- * 1. 解析 AWS SSE 事件格式
+ * 1. 解析 AWS SSE 事件格式（参考 kiro-gateway/parsers.py）
  * 2. 提取 thinking 内容（<thinking>...</thinking> 标签）
  * 3. 转换为 Claude SSE 事件
- * 4. 处理工具调用
+ * 4. 处理工具调用（结构化格式 + 文本格式）
  */
 
 import type { Response } from 'express';
 import type { Usage, ContentBlock, ClaudeResponse } from '../../types.js';
 import { logger } from '../../../../lib/logger.js';
 import { v4 as uuidv4 } from 'uuid';
+
+// ==================== AWS Event Stream Parser ====================
+
+/**
+ * 工具调用接口
+ */
+interface ToolCall {
+  id: string;
+  name: string;
+  arguments: string; // JSON string
+}
+
+/**
+ * 解析后的事件
+ */
+interface ParsedEvent {
+  type: 'content' | 'tool_start' | 'tool_input' | 'tool_stop' | 'usage' | 'context_usage';
+  data: unknown;
+}
+
+/**
+ * AWS Event Stream 解析器
+ *
+ * 参考 kiro-gateway/parsers.py 的 AwsEventStreamParser
+ */
+class AwsEventStreamParser {
+  private buffer = '';
+  private lastContent: string | null = null;
+  private currentToolCall: ToolCall | null = null;
+  private toolCalls: ToolCall[] = [];
+
+  // 事件模式匹配
+  private static readonly EVENT_PATTERNS: [string, ParsedEvent['type']][] = [
+    ['{"content":', 'content'],
+    ['{"name":', 'tool_start'],
+    ['{"input":', 'tool_input'],
+    ['{"stop":', 'tool_stop'],
+    ['{"usage":', 'usage'],
+    ['{"contextUsagePercentage":', 'context_usage'],
+  ];
+
+  /**
+   * 找到匹配的右大括号位置
+   */
+  private findMatchingBrace(text: string, startPos: number): number {
+    if (startPos >= text.length || text[startPos] !== '{') {
+      return -1;
+    }
+
+    let braceCount = 0;
+    let inString = false;
+    let escapeNext = false;
+
+    for (let i = startPos; i < text.length; i++) {
+      const char = text[i];
+
+      if (escapeNext) {
+        escapeNext = false;
+        continue;
+      }
+
+      if (char === '\\' && inString) {
+        escapeNext = true;
+        continue;
+      }
+
+      if (char === '"' && !escapeNext) {
+        inString = !inString;
+        continue;
+      }
+
+      if (!inString) {
+        if (char === '{') {
+          braceCount++;
+        } else if (char === '}') {
+          braceCount--;
+          if (braceCount === 0) {
+            return i;
+          }
+        }
+      }
+    }
+
+    return -1;
+  }
+
+  /**
+   * 处理输入的数据块
+   */
+  feed(chunk: string): ParsedEvent[] {
+    this.buffer += chunk;
+    const events: ParsedEvent[] = [];
+
+    while (true) {
+      // 找到最早出现的事件模式
+      let earliestPos = -1;
+      let earliestType: ParsedEvent['type'] | null = null;
+
+      for (const [pattern, eventType] of AwsEventStreamParser.EVENT_PATTERNS) {
+        const pos = this.buffer.indexOf(pattern);
+        if (pos !== -1 && (earliestPos === -1 || pos < earliestPos)) {
+          earliestPos = pos;
+          earliestType = eventType;
+        }
+      }
+
+      if (earliestPos === -1 || earliestType === null) {
+        break;
+      }
+
+      // 找到 JSON 结束位置
+      const jsonEnd = this.findMatchingBrace(this.buffer, earliestPos);
+      if (jsonEnd === -1) {
+        // JSON 不完整，等待更多数据
+        break;
+      }
+
+      const jsonStr = this.buffer.slice(earliestPos, jsonEnd + 1);
+      this.buffer = this.buffer.slice(jsonEnd + 1);
+
+      try {
+        const data = JSON.parse(jsonStr);
+        const event = this.processEvent(data, earliestType);
+        if (event) {
+          events.push(event);
+        }
+      } catch {
+        logger.warn({ jsonStr: jsonStr.slice(0, 100) }, 'Failed to parse Kiro JSON');
+      }
+    }
+
+    return events;
+  }
+
+  /**
+   * 处理解析后的事件
+   */
+  private processEvent(data: Record<string, unknown>, eventType: ParsedEvent['type']): ParsedEvent | null {
+    switch (eventType) {
+      case 'content':
+        return this.processContentEvent(data);
+      case 'tool_start':
+        return this.processToolStartEvent(data);
+      case 'tool_input':
+        return this.processToolInputEvent(data);
+      case 'tool_stop':
+        return this.processToolStopEvent(data);
+      case 'usage':
+        return { type: 'usage', data: data.usage };
+      case 'context_usage':
+        return { type: 'context_usage', data: data.contextUsagePercentage };
+      default:
+        return null;
+    }
+  }
+
+  private processContentEvent(data: Record<string, unknown>): ParsedEvent | null {
+    const content = data.content as string || '';
+
+    // 跳过 followupPrompt
+    if (data.followupPrompt) {
+      return null;
+    }
+
+    // 去重重复内容
+    if (content === this.lastContent) {
+      return null;
+    }
+
+    this.lastContent = content;
+    return { type: 'content', data: content };
+  }
+
+  private processToolStartEvent(data: Record<string, unknown>): ParsedEvent | null {
+    // 完成之前的工具调用
+    if (this.currentToolCall) {
+      this.finalizeToolCall();
+    }
+
+    // input 可以是字符串或对象
+    const inputData = data.input;
+    let inputStr: string;
+    if (typeof inputData === 'object' && inputData !== null) {
+      inputStr = JSON.stringify(inputData);
+    } else {
+      inputStr = inputData ? String(inputData) : '';
+    }
+
+    this.currentToolCall = {
+      id: (data.toolUseId as string) || `toolu_${uuidv4().replace(/-/g, '').slice(0, 24)}`,
+      name: (data.name as string) || '',
+      arguments: inputStr,
+    };
+
+    // 如果同时有 stop，立即完成
+    if (data.stop) {
+      this.finalizeToolCall();
+    }
+
+    return null;
+  }
+
+  private processToolInputEvent(data: Record<string, unknown>): ParsedEvent | null {
+    if (this.currentToolCall) {
+      const inputData = data.input;
+      let inputStr: string;
+      if (typeof inputData === 'object' && inputData !== null) {
+        inputStr = JSON.stringify(inputData);
+      } else {
+        inputStr = inputData ? String(inputData) : '';
+      }
+      this.currentToolCall.arguments += inputStr;
+    }
+    return null;
+  }
+
+  private processToolStopEvent(data: Record<string, unknown>): ParsedEvent | null {
+    if (this.currentToolCall && data.stop) {
+      this.finalizeToolCall();
+    }
+    return null;
+  }
+
+  private finalizeToolCall(): void {
+    if (!this.currentToolCall) {
+      return;
+    }
+
+    // 尝试解析并规范化参数为 JSON
+    let args = this.currentToolCall.arguments;
+    if (args.trim()) {
+      try {
+        const parsed = JSON.parse(args);
+        args = JSON.stringify(parsed);
+      } catch {
+        logger.warn({ toolName: this.currentToolCall.name, args: args.slice(0, 200) }, 'Failed to parse tool arguments');
+        args = '{}';
+      }
+    } else {
+      args = '{}';
+    }
+
+    this.currentToolCall.arguments = args;
+    this.toolCalls.push(this.currentToolCall);
+    this.currentToolCall = null;
+  }
+
+  /**
+   * 获取所有已完成的工具调用
+   */
+  getToolCalls(): ToolCall[] {
+    if (this.currentToolCall) {
+      this.finalizeToolCall();
+    }
+    return this.deduplicateToolCalls(this.toolCalls);
+  }
+
+  /**
+   * 工具调用去重
+   */
+  private deduplicateToolCalls(toolCalls: ToolCall[]): ToolCall[] {
+    const byId = new Map<string, ToolCall>();
+
+    for (const tc of toolCalls) {
+      const existing = byId.get(tc.id);
+      if (!existing) {
+        byId.set(tc.id, tc);
+      } else {
+        // 保留参数更多的那个
+        if (tc.arguments !== '{}' && (existing.arguments === '{}' || tc.arguments.length > existing.arguments.length)) {
+          byId.set(tc.id, tc);
+        }
+      }
+    }
+
+    // 按 name+arguments 再次去重
+    const seen = new Set<string>();
+    const unique: ToolCall[] = [];
+
+    for (const tc of byId.values()) {
+      const key = `${tc.name}-${tc.arguments}`;
+      if (!seen.has(key)) {
+        seen.add(key);
+        unique.push(tc);
+      }
+    }
+
+    return unique;
+  }
+}
+
+/**
+ * 解析文本中的 bracket 格式工具调用
+ * 格式: [Called func_name with args: {...}]
+ */
+function parseBracketToolCalls(text: string): ToolCall[] {
+  if (!text || !text.includes('[Called')) {
+    return [];
+  }
+
+  const toolCalls: ToolCall[] = [];
+  const pattern = /\[Called\s+(\w+)\s+with\s+args:\s*/gi;
+
+  let match;
+  while ((match = pattern.exec(text)) !== null) {
+    const funcName = match[1];
+    const argsStart = match.index + match[0].length;
+
+    // 找到 JSON 开始
+    const jsonStart = text.indexOf('{', argsStart);
+    if (jsonStart === -1) continue;
+
+    // 找到匹配的右大括号
+    const jsonEnd = findMatchingBrace(text, jsonStart);
+    if (jsonEnd === -1) continue;
+
+    const jsonStr = text.slice(jsonStart, jsonEnd + 1);
+
+    try {
+      const args = JSON.parse(jsonStr);
+      toolCalls.push({
+        id: `toolu_${uuidv4().replace(/-/g, '').slice(0, 24)}`,
+        name: funcName,
+        arguments: JSON.stringify(args),
+      });
+    } catch {
+      logger.warn({ funcName, jsonStr: jsonStr.slice(0, 100) }, 'Failed to parse bracket tool call');
+    }
+  }
+
+  return toolCalls;
+}
+
+function findMatchingBrace(text: string, startPos: number): number {
+  if (startPos >= text.length || text[startPos] !== '{') {
+    return -1;
+  }
+
+  let braceCount = 0;
+  let inString = false;
+  let escapeNext = false;
+
+  for (let i = startPos; i < text.length; i++) {
+    const char = text[i];
+
+    if (escapeNext) {
+      escapeNext = false;
+      continue;
+    }
+
+    if (char === '\\' && inString) {
+      escapeNext = true;
+      continue;
+    }
+
+    if (char === '"' && !escapeNext) {
+      inString = !inString;
+      continue;
+    }
+
+    if (!inString) {
+      if (char === '{') {
+        braceCount++;
+      } else if (char === '}') {
+        braceCount--;
+        if (braceCount === 0) {
+          return i;
+        }
+      }
+    }
+  }
+
+  return -1;
+}
 
 // ==================== 流式响应处理 ====================
 
@@ -468,13 +842,14 @@ export async function handleKiroSSEStream(
   options: KiroStreamingOptions
 ): Promise<KiroSSEStreamResult> {
   const state = new KiroStreamingState(options);
+  const parser = new AwsEventStreamParser();
   const decoder = new TextDecoder();
   const reader = readable.getReader();
 
-  let buffer = '';
   let inputTokens = options.inputTokens ?? 0;
   let outputTokens = 0;
   let finishReason: string | undefined;
+  let fullContent = ''; // 用于解析 bracket 格式工具调用
 
   // 收集上游原始响应和客户端响应
   const upstreamChunks: string[] = [];
@@ -491,67 +866,47 @@ export async function handleKiroSSEStream(
 
       const chunk = decoder.decode(value, { stream: true });
       upstreamChunks.push(chunk);
-      buffer += chunk;
 
-      // 从二进制 AWS SSE 格式中提取 JSON（使用正则表达式）
-      const jsonMatches = buffer.match(/\{"[^{}]*(?:\{[^{}]*\}[^{}]*)*\}/g) || [];
+      // 使用 AwsEventStreamParser 解析事件
+      const events = parser.feed(chunk);
 
-      for (const jsonStr of jsonMatches) {
-        try {
-          const json = JSON.parse(jsonStr);
-          let content = '';
+      for (const event of events) {
+        if (event.type === 'content') {
+          const content = event.data as string;
+          fullContent += content;
 
-          // assistantResponseEvent
-          if (json.assistantResponseEvent?.content) {
-            content = json.assistantResponseEvent.content;
+          const chunks = state.processContent(content);
+          for (const c of chunks) {
+            res.write(c);
+            clientChunks.push(c);
           }
-          // 直接的 content 字段
-          else if (json.content && typeof json.content === 'string') {
-            content = json.content;
-          }
-
-          if (content) {
-            const chunks = state.processContent(content);
-            for (const c of chunks) {
-              res.write(c);
-              clientChunks.push(c);
-            }
-            outputTokens += Math.ceil(content.length / 4);
-          }
-
-          // codeEvent（工具调用）
-          if (json.codeEvent?.content) {
-            try {
-              const toolData = JSON.parse(json.codeEvent.content);
-              if (toolData.tool_use_id && toolData.name) {
-                const chunks = state.processToolUse(
-                  toolData.tool_use_id,
-                  toolData.name,
-                  toolData.input
-                );
-                for (const c of chunks) {
-                  res.write(c);
-                  clientChunks.push(c);
-                }
-              }
-            } catch {
-              // 不是工具调用，作为文本处理
-              const chunks = state.processContent(json.codeEvent.content);
-              for (const c of chunks) {
-                res.write(c);
-                clientChunks.push(c);
-              }
-            }
-          }
-        } catch {
-          // 跳过无效的 JSON
+          outputTokens += Math.ceil(content.length / 4);
         }
       }
+    }
 
-      // 清空已处理的 buffer（保留最后一部分以防 JSON 被截断）
-      const lastBrace = buffer.lastIndexOf('}');
-      if (lastBrace > 0) {
-        buffer = buffer.substring(lastBrace + 1);
+    // 检查文本中的 bracket 格式工具调用
+    const bracketToolCalls = parseBracketToolCalls(fullContent);
+
+    // 获取结构化工具调用
+    const structuredToolCalls = parser.getToolCalls();
+
+    // 合并所有工具调用（去重）
+    const allToolCalls = deduplicateToolCalls([...structuredToolCalls, ...bracketToolCalls]);
+
+    // 输出工具调用
+    for (const tc of allToolCalls) {
+      let input: unknown;
+      try {
+        input = JSON.parse(tc.arguments);
+      } catch {
+        input = {};
+      }
+
+      const chunks = state.processToolUse(tc.id, tc.name, input);
+      for (const c of chunks) {
+        res.write(c);
+        clientChunks.push(c);
       }
     }
 
@@ -562,7 +917,7 @@ export async function handleKiroSSEStream(
       clientChunks.push(chunk);
     }
 
-    finishReason = 'end_turn';
+    finishReason = allToolCalls.length > 0 ? 'tool_use' : 'end_turn';
   } finally {
     reader.releaseLock();
     res.end();
@@ -575,6 +930,37 @@ export async function handleKiroSSEStream(
     upstreamResponseBody: upstreamChunks.join(''),
     clientResponseBody: clientChunks.join(''),
   };
+}
+
+/**
+ * 工具调用去重
+ */
+function deduplicateToolCalls(toolCalls: ToolCall[]): ToolCall[] {
+  const byId = new Map<string, ToolCall>();
+
+  for (const tc of toolCalls) {
+    const existing = byId.get(tc.id);
+    if (!existing) {
+      byId.set(tc.id, tc);
+    } else {
+      if (tc.arguments !== '{}' && (existing.arguments === '{}' || tc.arguments.length > existing.arguments.length)) {
+        byId.set(tc.id, tc);
+      }
+    }
+  }
+
+  const seen = new Set<string>();
+  const unique: ToolCall[] = [];
+
+  for (const tc of byId.values()) {
+    const key = `${tc.name}-${tc.arguments}`;
+    if (!seen.has(key)) {
+      seen.add(key);
+      unique.push(tc);
+    }
+  }
+
+  return unique;
 }
 
 // ==================== 非流式响应处理 ====================
@@ -599,68 +985,62 @@ export async function transformKiroResponse(
   let hasToolCall = false;
   let fullText = '';
 
-  // 从二进制 AWS SSE 格式中提取所有 JSON 内容
-  try {
-    // 使用正则表达式提取所有 JSON 对象
-    const jsonMatches = kiroResponseText.match(/\{"[^{}]*(?:\{[^{}]*\}[^{}]*)*\}/g) || [];
+  // 使用 AwsEventStreamParser 解析
+  const parser = new AwsEventStreamParser();
+  const events = parser.feed(kiroResponseText);
 
-    for (const jsonStr of jsonMatches) {
-      try {
-        const json = JSON.parse(jsonStr);
+  for (const event of events) {
+    if (event.type === 'content') {
+      fullText += event.data as string;
+    }
+  }
 
-        // assistantResponseEvent
-        if (json.assistantResponseEvent?.content) {
-          fullText += json.assistantResponseEvent.content;
-        }
-        // 直接的 content 字段
-        else if (json.content && typeof json.content === 'string') {
-          fullText += json.content;
-        }
-        // codeEvent（工具调用）
-        else if (json.codeEvent?.content) {
-          try {
-            const toolData = JSON.parse(json.codeEvent.content);
-            if (toolData.tool_use_id && toolData.name) {
-              hasToolCall = true;
-              contentBlocks.push({
-                type: 'tool_use',
-                id: toolData.tool_use_id,
-                name: toolData.name,
-                input: toolData.input || {},
-              });
-            }
-          } catch {
-            fullText += json.codeEvent.content;
-          }
-        }
-      } catch {
-        // 跳过无效的 JSON
-      }
+  // 获取结构化工具调用
+  const structuredToolCalls = parser.getToolCalls();
+
+  // 检查 bracket 格式工具调用
+  const bracketToolCalls = parseBracketToolCalls(fullText);
+
+  // 合并所有工具调用
+  const allToolCalls = deduplicateToolCalls([...structuredToolCalls, ...bracketToolCalls]);
+
+  // 解析 thinking 标签
+  if (fullText) {
+    const { thinking, text } = extractThinkingFromText(fullText);
+
+    if (thinking) {
+      const thinkingSignature = `sig_${uuidv4().replace(/-/g, '').slice(0, 32)}`;
+      contentBlocks.push({
+        type: 'thinking',
+        thinking,
+        signature: thinkingSignature,
+      });
     }
 
-    // 解析 thinking 标签
-    if (fullText) {
-      const { thinking, text } = extractThinkingFromText(fullText);
-
-      if (thinking) {
-        // 生成 thinking 块签名（模拟 Anthropic API 的签名格式）
-        const thinkingSignature = `sig_${uuidv4().replace(/-/g, '').slice(0, 32)}`;
-        contentBlocks.push({
-          type: 'thinking',
-          thinking,
-          signature: thinkingSignature,
-        });
-      }
-
-      if (text) {
-        contentBlocks.push({
-          type: 'text',
-          text,
-        });
-      }
+    if (text) {
+      contentBlocks.push({
+        type: 'text',
+        text,
+      });
     }
-  } catch (e) {
-    logger.error({ error: e, responseText: kiroResponseText.substring(0, 500) }, 'Failed to parse Kiro response');
+  }
+
+  // 添加工具调用
+  for (const tc of allToolCalls) {
+    hasToolCall = true;
+    let input: unknown;
+    try {
+      input = JSON.parse(tc.arguments);
+    } catch {
+      input = {};
+    }
+
+    contentBlocks.push({
+      type: 'tool_use',
+      id: tc.id,
+      name: tc.name,
+      input: input as Record<string, unknown>,
+    });
   }
 
   // 确定 stop_reason
@@ -676,7 +1056,7 @@ export async function transformKiroResponse(
     .join('');
 
   const usage: Usage = {
-    input_tokens: options.inputTokens ?? 0, // 近似估算
+    input_tokens: options.inputTokens ?? 0,
     output_tokens: Math.ceil(totalText.length / 4),
   };
 

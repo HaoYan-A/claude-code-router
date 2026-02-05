@@ -81,11 +81,9 @@ export function convertClaudeToKiro(
     enableThinking
   );
 
-  // 5. 构建请求体
+  // 5. 构建请求体（参考 kiro-gateway，不需要 agentContinuationId 和 agentTaskType）
   const body: KiroRequest = {
     conversationState: {
-      agentContinuationId: uuidv4(),
-      agentTaskType: 'vibe',
       chatTriggerType: 'MANUAL',
       conversationId,
       currentMessage: {
@@ -107,6 +105,7 @@ export function convertClaudeToKiro(
     body.conversationState.currentMessage.userInputMessage.userInputMessageContext!.tools = kiroTools;
   }
 
+  // 详细日志（调试用）
   logger.info(
     {
       claudeModel: claudeReq.model,
@@ -115,10 +114,10 @@ export function convertClaudeToKiro(
       toolsCount: kiroTools.length,
       hasToolResults: toolResults.length > 0,
       enableThinking,
-      requestBody: JSON.stringify(body).substring(0, 500),
     },
     'Converted Claude request to Kiro format'
   );
+
 
   return { body, kiroModelId };
 }
@@ -304,6 +303,8 @@ function buildMessages(
         toolResults.push(...results);
       } else {
         // 添加到历史
+        // 注意：history 中的 userInputMessage 只包含 toolResults，不包含 tools！
+        // tools 只在 currentMessage 中传递（参考 kiro-gateway）
         const userInputMessage: KiroUserInputMessage = {
           content: content || EMPTY_CONTENT_PLACEHOLDER,
           modelId,
@@ -315,19 +316,13 @@ function buildMessages(
         if (results.length > 0) {
           userInputMessage.userInputMessageContext = { toolResults: results };
         }
-        if (tools.length > 0) {
-          if (!userInputMessage.userInputMessageContext) {
-            userInputMessage.userInputMessageContext = {};
-          }
-          userInputMessage.userInputMessageContext.tools = tools;
-        }
         history.push({ userInputMessage });
       }
     } else if (msg.role === 'assistant') {
       const { content, toolUses } = processAssistantMessage(msg.content);
+      // 注意：Kiro API 的 assistantResponseMessage 不需要 messageId 字段！
       const assistantResponseMessage: KiroAssistantResponseMessage = {
         content: content || EMPTY_CONTENT_PLACEHOLDER,
-        messageId: uuidv4(),
       };
       if (toolUses.length > 0) {
         assistantResponseMessage.toolUses = toolUses;
@@ -336,20 +331,27 @@ function buildMessages(
     }
   }
 
-  // 如果没有用户消息，创建一个空消息
-  if (!lastUserContent && messages.length === 0) {
-    lastUserContent = EMPTY_CONTENT_PLACEHOLDER;
-  }
-
   // 构建当前消息
   let currentContent = lastUserContent;
+
+  // 重要：如果 content 为空，需要根据场景设置占位符
+  // - 如果有 toolResults，说明这是工具结果消息，不应该用 "Continue"
+  // - 否则使用 "Continue"（参考 kiro-gateway）
+  if (!currentContent) {
+    if (toolResults.length > 0) {
+      // 工具结果消息：使用更明确的提示，避免 AI 误解为 "继续做事"
+      currentContent = '(Tool results provided above)';
+    } else {
+      currentContent = 'Continue';
+    }
+  }
 
   // 注入 system prompt（优先注入到第一条历史 user，否则注入到 current）
   if (systemPrompt) {
     const firstUserIndex = history.findIndex((entry) => 'userInputMessage' in entry);
     if (firstUserIndex !== -1) {
-      const firstUser = history[firstUserIndex].userInputMessage;
-      firstUser.content = `${systemPrompt}\n\n${firstUser.content || EMPTY_CONTENT_PLACEHOLDER}`;
+      const firstUserEntry = history[firstUserIndex] as { userInputMessage: KiroUserInputMessage };
+      firstUserEntry.userInputMessage.content = `${systemPrompt}\n\n${firstUserEntry.userInputMessage.content || EMPTY_CONTENT_PLACEHOLDER}`;
     } else {
       currentContent = `${systemPrompt}\n\n${currentContent}`;
     }
@@ -361,7 +363,7 @@ function buildMessages(
   }
 
   const currentMessage: KiroUserInputMessage = {
-    content: currentContent || EMPTY_CONTENT_PLACEHOLDER,
+    content: currentContent,
     modelId,
     origin: 'AI_EDITOR',
     // 始终包含 userInputMessageContext，即使 tools 为空
@@ -484,13 +486,16 @@ function toolResultContentToText(
 
 /**
  * 转换 tool_result 为 Kiro 格式
+ *
+ * Kiro 格式: {"content": [{"text": "..."}], "status": "success", "toolUseId": "..."}
+ * 注意：content 是数组，不是对象！
  */
 function convertToolResult(block: ContentBlock & { type: 'tool_result' }): KiroToolResult {
   const text = toolResultContentToText(block.content, block.is_error);
 
   return {
     toolUseId: block.tool_use_id,
-    content: { text },
+    content: [{ text }],  // content 是数组！
     status: block.is_error ? 'error' : 'success',
   };
 }
@@ -531,10 +536,11 @@ function processAssistantMessage(content: MessageContent): ProcessAssistantResul
         break;
 
       case 'tool_use':
+        // 注意：Kiro API 的 toolUses.input 应该是对象，不是 JSON 字符串！
         toolUses.push({
           toolUseId: block.id,
           name: truncateToolName(block.name),
-          input: JSON.stringify(block.input),
+          input: block.input ?? {},
         });
         break;
     }
