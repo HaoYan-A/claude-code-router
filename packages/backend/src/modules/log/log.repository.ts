@@ -1,5 +1,5 @@
 import type { RequestLog, Prisma, RequestStatus } from '@prisma/client';
-import type { LogFilterSchema, RequestLogSummary, StatsTimeRange } from '@claude-code-router/shared';
+import type { LogFilterSchema, RequestLogSummary, StatsTimeRange, LeaderboardTimeRange } from '@claude-code-router/shared';
 import { prisma } from '../../lib/prisma.js';
 
 export class LogRepository {
@@ -185,6 +185,75 @@ export class LogRepository {
       totalOutputTokens: aggregates._sum.outputTokens ?? 0,
       totalCost: aggregates._sum.cost?.toNumber() ?? 0,
     };
+  }
+
+  /**
+   * 获取用户消费排行榜数据
+   * @param timeRange 时间范围：day=本日, week=本周, month=本月
+   * @returns 按费用降序排列的前5名用户
+   */
+  async getLeaderboard(timeRange: LeaderboardTimeRange) {
+    const now = new Date();
+    let startDate: Date;
+
+    if (timeRange === 'day') {
+      // 本日：今天0点开始
+      startDate = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    } else if (timeRange === 'week') {
+      // 本周：周一0点开始
+      const dayOfWeek = now.getDay();
+      const diff = dayOfWeek === 0 ? 6 : dayOfWeek - 1; // 周日为0，需要特殊处理
+      startDate = new Date(now.getFullYear(), now.getMonth(), now.getDate() - diff);
+    } else {
+      // 本月：本月1号0点开始
+      startDate = new Date(now.getFullYear(), now.getMonth(), 1);
+    }
+
+    // 使用 groupBy 按 userId 聚合
+    const aggregatedData = await prisma.requestLog.groupBy({
+      by: ['userId'],
+      where: {
+        createdAt: { gte: startDate },
+        status: 'success',
+      },
+      _sum: {
+        cost: true,
+      },
+      _count: {
+        id: true,
+      },
+      orderBy: {
+        _sum: {
+          cost: 'desc',
+        },
+      },
+      take: 5,
+    });
+
+    // 获取用户信息
+    const userIds = aggregatedData.map((item) => item.userId);
+    const users = await prisma.user.findMany({
+      where: { id: { in: userIds } },
+      select: {
+        id: true,
+        githubUsername: true,
+        avatarUrl: true,
+      },
+    });
+
+    const userMap = new Map(users.map((u) => [u.id, u]));
+
+    return aggregatedData.map((item, index) => {
+      const user = userMap.get(item.userId);
+      return {
+        rank: index + 1,
+        userId: item.userId,
+        username: user?.githubUsername ?? 'Unknown',
+        avatarUrl: user?.avatarUrl ?? null,
+        totalCost: item._sum.cost?.toNumber() ?? 0,
+        requestCount: item._count.id,
+      };
+    });
   }
 }
 

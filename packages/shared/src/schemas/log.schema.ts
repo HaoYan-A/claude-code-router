@@ -4,6 +4,37 @@ import { STATS_TIME_RANGES } from '../constants/models.js';
 
 export const requestStatusSchema = z.enum(['success', 'error', 'pending']);
 
+// 排行榜时间范围
+export const LEADERBOARD_TIME_RANGES = ['day', 'week', 'month'] as const;
+export type LeaderboardTimeRange = (typeof LEADERBOARD_TIME_RANGES)[number];
+
+// 排行榜查询参数 schema
+export const leaderboardQuerySchema = z.object({
+  timeRange: z.enum(LEADERBOARD_TIME_RANGES),
+});
+
+// 排行榜项 schema
+export const leaderboardItemSchema = z.object({
+  rank: z.number().int().min(1).max(5),
+  userId: z.string(),
+  username: z.string(),
+  avatarUrl: z.string().nullable(),
+  totalCost: z.number(),
+  requestCount: z.number().int(),
+  isCurrentUser: z.boolean(),
+});
+
+// 排行榜响应 schema
+export const leaderboardResponseSchema = z.object({
+  timeRange: z.enum(LEADERBOARD_TIME_RANGES),
+  items: z.array(leaderboardItemSchema),
+});
+
+// 排行榜类型导出
+export type LeaderboardQuery = z.infer<typeof leaderboardQuerySchema>;
+export type LeaderboardItem = z.infer<typeof leaderboardItemSchema>;
+export type LeaderboardResponse = z.infer<typeof leaderboardResponseSchema>;
+
 // 统计查询参数 schema
 export const logStatsQuerySchema = z.object({
   timeRange: z.enum(STATS_TIME_RANGES).optional().default('total'),

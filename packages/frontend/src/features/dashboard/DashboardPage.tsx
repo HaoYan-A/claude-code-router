@@ -4,6 +4,7 @@ import { useAuthStore } from '@/stores/auth.store';
 import { Activity, CheckCircle, XCircle, DollarSign } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { QuotaSummaryCard } from './components/QuotaSummaryCard';
+import { LeaderboardCard } from './components/LeaderboardCard';
 
 export function DashboardPage() {
   const { data, isLoading } = useLogStats('day');
@@ -104,6 +105,10 @@ export function DashboardPage() {
           </CardContent>
         </Card>
         <QuotaSummaryCard />
+      </div>
+
+      <div className="mt-8">
+        <LeaderboardCard />
       </div>
     </div>
   );

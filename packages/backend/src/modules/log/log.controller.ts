@@ -1,6 +1,6 @@
 import type { Request, Response } from 'express';
 import type { LogFilterSchema } from '@claude-code-router/shared';
-import { logStatsQuerySchema } from '@claude-code-router/shared';
+import { logStatsQuerySchema, leaderboardQuerySchema } from '@claude-code-router/shared';
 import { logService } from './log.service.js';
 
 export class LogController {
@@ -25,6 +25,13 @@ export class LogController {
     const { timeRange } = logStatsQuerySchema.parse(req.query);
     const stats = await logService.getStats(userId, timeRange);
     res.json({ success: true, data: stats });
+  }
+
+  async getLeaderboard(req: Request, res: Response): Promise<void> {
+    const { timeRange } = leaderboardQuerySchema.parse(req.query);
+    const currentUserId = req.auth!.userId;
+    const leaderboard = await logService.getLeaderboard(timeRange, currentUserId);
+    res.json({ success: true, data: leaderboard });
   }
 }
 

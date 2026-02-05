@@ -16,6 +16,8 @@ import type {
   ApiKeyUsageStatsResponse,
   ApiKeyDailyUsageResponse,
   QuotaSummaryResponse,
+  LeaderboardTimeRange,
+  LeaderboardResponse,
 } from '@claude-code-router/shared';
 
 interface ApiResponse<T> {
@@ -236,5 +238,14 @@ export function useQuotaSummary() {
     queryKey: ['quota', 'summary'],
     queryFn: () => api.get<ApiResponse<QuotaSummaryResponse>>('/quota/summary'),
     refetchInterval: 60000, // 每分钟刷新
+  });
+}
+
+// Leaderboard
+export function useLeaderboard(timeRange: LeaderboardTimeRange = 'day') {
+  return useQuery({
+    queryKey: ['leaderboard', timeRange],
+    queryFn: () => api.get<ApiResponse<LeaderboardResponse>>(`/logs/leaderboard?timeRange=${timeRange}`),
+    staleTime: 60 * 1000, // 1分钟内不重新请求
   });
 }
