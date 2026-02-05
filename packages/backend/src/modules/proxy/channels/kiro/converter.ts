@@ -32,7 +32,7 @@ import type {
 } from './models.js';
 import {
   CLAUDE_TO_KIRO_MODEL_MAP,
-  THINKING_TAGS,
+  generateThinkingTags,
   MAX_TOOL_NAME_LENGTH,
   MAX_TOOL_DESCRIPTION_LENGTH,
   EMPTY_CONTENT_PLACEHOLDER,
@@ -58,7 +58,13 @@ export function convertClaudeToKiro(
   claudeReq: ClaudeRequest,
   options: KiroConvertOptions = {}
 ): KiroConvertResult {
-  const { conversationId = uuidv4(), enableThinking = true } = options;
+  const { conversationId = uuidv4() } = options;
+
+  // 从请求中读取 thinking 配置
+  // 如果 thinking.type === 'enabled' 或未设置，则启用 thinking
+  const thinkingConfig = claudeReq.thinking;
+  const enableThinking = !thinkingConfig || thinkingConfig.type !== 'disabled';
+  const thinkingBudgetTokens = thinkingConfig?.budget_tokens;
 
   // 1. 映射模型 ID
   const kiroModelId = mapModelId(claudeReq.model);
@@ -78,7 +84,8 @@ export function convertClaudeToKiro(
     systemPrompt,
     kiroModelId,
     kiroTools,
-    enableThinking
+    enableThinking,
+    thinkingBudgetTokens
   );
 
   // 5. 构建请求体（参考 kiro-gateway，不需要 agentContinuationId 和 agentTaskType）
@@ -114,6 +121,7 @@ export function convertClaudeToKiro(
       toolsCount: kiroTools.length,
       hasToolResults: toolResults.length > 0,
       enableThinking,
+      thinkingBudgetTokens: thinkingBudgetTokens || 10000,
     },
     'Converted Claude request to Kiro format'
   );
@@ -281,7 +289,8 @@ function buildMessages(
   systemPrompt: string,
   modelId: string,
   tools: KiroTool[],
-  enableThinking: boolean
+  enableThinking: boolean,
+  thinkingBudgetTokens?: number
 ): BuildMessagesResult {
   const history: KiroHistoryMessage[] = [];
   const toolResults: KiroToolResult[] = [];
@@ -357,9 +366,10 @@ function buildMessages(
     }
   }
 
-  // 注入 thinking 标签
+  // 注入 thinking 标签（使用请求中的 budget_tokens 或默认值）
   if (enableThinking) {
-    currentContent = `${THINKING_TAGS}\n\n${currentContent}`;
+    const thinkingTags = generateThinkingTags(thinkingBudgetTokens);
+    currentContent = `${thinkingTags}\n\n${currentContent}`;
   }
 
   const currentMessage: KiroUserInputMessage = {

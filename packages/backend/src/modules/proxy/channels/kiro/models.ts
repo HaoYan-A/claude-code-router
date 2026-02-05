@@ -203,11 +203,13 @@ export const CLAUDE_TO_KIRO_MODEL_MAP: Record<string, string> = {
 };
 
 /**
- * Thinking 标签模板
- * 在最后一条用户消息中注入
+ * 生成 Thinking 标签
+ * @param budgetTokens 思考预算 tokens（默认 10000）
  */
-export const THINKING_TAGS = `<thinking_mode>enabled</thinking_mode>
-<max_thinking_length>4000</max_thinking_length>`;
+export function generateThinkingTags(budgetTokens: number = 10000): string {
+  return `<thinking_mode>enabled</thinking_mode>
+<max_thinking_length>${budgetTokens}</max_thinking_length>`;
+}
 
 /**
  * 工具名称最大长度（Kiro 限制）
