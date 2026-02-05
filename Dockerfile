@@ -3,8 +3,10 @@ FROM node:20-alpine AS builder
 
 WORKDIR /app
 
-# 安装 pnpm
-RUN npm install -g pnpm@9.1.0
+# 配置国内镜像源并安装 pnpm
+RUN npm config set registry https://registry.npmmirror.com && \
+    npm install -g pnpm@9.1.0 && \
+    pnpm config set registry https://registry.npmmirror.com
 
 # 复制 workspace 配置文件
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml tsconfig.base.json ./
@@ -34,13 +36,17 @@ RUN pnpm db:generate && pnpm build:backend
 # Stage 2: Production
 FROM node:20-alpine AS production
 
-# 安装 OpenSSL（Prisma 需要）
-RUN apk add --no-cache openssl
+# 配置 Alpine 镜像源并安装 OpenSSL（Prisma 需要）
+RUN sed -i 's/dl-cdn.alpinelinux.org/mirrors.aliyun.com/g' /etc/apk/repositories && \
+    apk update && \
+    apk add --no-cache openssl
 
 WORKDIR /app
 
-# 安装 pnpm
-RUN npm install -g pnpm@9.1.0
+# 配置国内镜像源并安装 pnpm
+RUN npm config set registry https://registry.npmmirror.com && \
+    npm install -g pnpm@9.1.0 && \
+    pnpm config set registry https://registry.npmmirror.com
 
 # 复制 workspace 配置文件
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
