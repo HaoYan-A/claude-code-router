@@ -170,6 +170,9 @@ export class ProxyService {
       clientHeaders: JSON.stringify(sanitizeHeaders(options.headers)),
     });
 
+    // 用于在错误处理时记录 targetModel（即使账号选择失败也能获取）
+    let resolvedTargetModel: string | undefined;
+
     try {
       // 1. 提取模型 slot
       const modelSlot = extractModelSlot(claudeReq.model);
@@ -183,6 +186,8 @@ export class ProxyService {
           `No mapping found for model slot: ${modelSlot}`
         );
       }
+      // 保存 targetModel 以便在错误处理时使用
+      resolvedTargetModel = mapping.targetModel;
 
       // 3. 选择账号
       const account = await accountSelector.selectAccount(mapping.targetModel);
@@ -241,6 +246,8 @@ export class ProxyService {
           statusCode: error.statusCode,
           errorMessage: error.message,
           durationMs,
+          targetModel: resolvedTargetModel,
+          accountId: error.accountId,
         });
       } else {
         logger.error({ error, logId: log.id }, 'Unexpected proxy error');
@@ -259,8 +266,10 @@ export class ProxyService {
         logBuffer.add({
           id: log.id,
           status: 'error',
+          statusCode: 500,
           errorMessage: error instanceof Error ? error.message : 'Unknown error',
           durationMs,
+          targetModel: resolvedTargetModel,
         });
       }
     }
@@ -304,16 +313,17 @@ export class ProxyService {
           const canRetry = await accountSelector.handleRequestFailure(
             currentAccount.id,
             error.statusCode,
-            error.message
+            error.message,
+            context.targetModel
           );
 
           if (!canRetry) {
-            throw error;
+            throw error.withAccountId(currentAccount.id);
           }
 
           const allowRetryAll = error.statusCode === 429;
           if (!allowRetryAll && retryCount >= MAX_RETRIES) {
-            throw error;
+            throw error.withAccountId(currentAccount.id);
           }
 
           // 选择下一个账号（排除已尝试）
@@ -322,7 +332,7 @@ export class ProxyService {
             { excludeIds: Array.from(triedAccountIds) }
           );
           if (!nextAccount) {
-            throw error;
+            throw error.withAccountId(currentAccount.id);
           }
           currentAccount = nextAccount;
           triedAccountIds.add(nextAccount.id);
@@ -780,13 +790,22 @@ export class ProxyService {
  * 代理错误类
  */
 class ProxyError extends Error {
+  public accountId?: string;
+
   constructor(
     public readonly statusCode: number,
     public readonly code: string,
-    message: string
+    message: string,
+    accountId?: string
   ) {
     super(message);
     this.name = 'ProxyError';
+    this.accountId = accountId;
+  }
+
+  /** 创建带 accountId 的新错误副本 */
+  withAccountId(accountId: string): ProxyError {
+    return new ProxyError(this.statusCode, this.code, this.message, accountId);
   }
 }
 

@@ -21,7 +21,6 @@ import { redis, cacheKeys } from '../../lib/redis.js';
 
 // Token 提前刷新时间 (60 秒)
 const TOKEN_REFRESH_BUFFER_MS = 60 * 1000;
-const RATE_LIMIT_COOLDOWN_SEC = 60;
 
 interface SelectAccountOptions {
   excludeIds?: string[];
@@ -154,18 +153,17 @@ export class AccountSelector {
       }
     }
 
-    // 获取 project ID
+    // 获取 project ID（非必须）
     const projectId = await this.getProjectId(account, accessToken!);
     if (!projectId) {
-      logger.warn({ accountId: account.id }, 'Account missing project ID');
-      return null;
+      logger.debug({ accountId: account.id }, 'Account missing project ID, using empty string');
     }
 
     return {
       id: account.id,
       platform: 'antigravity',
       accessToken: accessToken!,
-      projectId,
+      projectId: projectId || '',
       refreshToken: account.refreshToken!,
       tokenExpiresAt,
     };
@@ -276,18 +274,29 @@ export class AccountSelector {
    * @param accountId 账号 ID
    * @param statusCode HTTP 状态码
    * @param errorMessage 错误信息
+   * @param targetModel 目标模型名称（用于 429 时设置配额）
    * @returns 是否应该重试（使用其他账号）
    */
   async handleRequestFailure(
     accountId: string,
     statusCode: number,
-    errorMessage?: string
+    errorMessage?: string,
+    targetModel?: string
   ): Promise<boolean> {
     switch (statusCode) {
       case 429:
-        // 配额耗尽，可以重试其他账号
-        logger.warn({ accountId, statusCode }, 'Account rate limited');
-        await this.markAccountCooldown(accountId);
+        // 配额耗尽，将该模型配额设为 0%
+        logger.warn({ accountId, statusCode, targetModel }, 'Account quota exhausted');
+
+        if (targetModel) {
+          // 解析重置时间
+          const resetTime = this.parseResetTime(errorMessage);
+          // 将该模型配额设为 0%，使账号对该模型不可用
+          await accountsRepository.upsertQuota(accountId, targetModel, 0, resetTime);
+          logger.info({ accountId, targetModel, resetTime }, 'Set model quota to 0% due to rate limit');
+        }
+
+        // 异步刷新配额（可以尽快检测额度是否恢复）
         this.refreshQuotaAsync(accountId);
         return true;
 
@@ -333,12 +342,27 @@ export class AccountSelector {
     }
   }
 
-  private async markAccountCooldown(accountId: string): Promise<void> {
-    try {
-      await redis.setex(cacheKeys.accountCooldown(accountId), RATE_LIMIT_COOLDOWN_SEC, '1');
-    } catch (error) {
-      logger.warn({ accountId, error }, 'Failed to set account cooldown');
-    }
+  /**
+   * 解析 429 错误信息中的重置时间
+   * @param errorMessage 错误信息，如 "reset after 124h34m41s"
+   * @returns ISO 格式的重置时间，或 null
+   */
+  private parseResetTime(errorMessage?: string): string | null {
+    if (!errorMessage) return null;
+    // 匹配 "reset after 124h34m41s" 格式
+    const match = errorMessage.match(/reset after (\d+h)?(\d+m)?(\d+s)?/i);
+    if (!match) return null;
+
+    // 计算重置时间点
+    const hours = match[1] ? parseInt(match[1]) : 0;
+    const minutes = match[2] ? parseInt(match[2]) : 0;
+    const seconds = match[3] ? parseInt(match[3]) : 0;
+    const totalSeconds = hours * 3600 + minutes * 60 + seconds;
+
+    if (totalSeconds === 0) return null;
+
+    const resetDate = new Date(Date.now() + totalSeconds * 1000);
+    return resetDate.toISOString();
   }
 
   private refreshQuotaAsync(accountId: string): void {
