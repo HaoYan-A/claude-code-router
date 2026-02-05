@@ -645,6 +645,11 @@ export class ProxyService {
         }
       );
 
+      // Kiro 返回的是 AWS 二进制 SSE 格式，包含 null 字节，需要转为 base64 存储
+      const sanitizedUpstreamBody = result.upstreamResponseBody
+        ? `base64:${Buffer.from(result.upstreamResponseBody).toString('base64')}`
+        : undefined;
+
       logBuffer.add({
         id: context.logId,
         status: 'success',
@@ -656,7 +661,7 @@ export class ProxyService {
         platform: 'kiro',
         accountId: context.accountId,
         upstreamResponseHeaders: JSON.stringify(upstreamResponseHeaders),
-        upstreamResponseBody: result.upstreamResponseBody,
+        upstreamResponseBody: sanitizedUpstreamBody,
         clientResponseHeaders: JSON.stringify({ 'Content-Type': 'text/event-stream' }),
         responseBody: result.clientResponseBody,
         cacheReadTokens: 0,
@@ -686,6 +691,11 @@ export class ProxyService {
       res.setHeader('X-Request-Id', context.logId);
       res.json(claudeResponse);
 
+      // Kiro 返回的是 AWS 二进制 SSE 格式，包含 null 字节，需要转为 base64 存储
+      const sanitizedKiroResponse = kiroResponseText
+        ? `base64:${Buffer.from(kiroResponseText).toString('base64')}`
+        : undefined;
+
       logBuffer.add({
         id: context.logId,
         status: 'success',
@@ -698,7 +708,7 @@ export class ProxyService {
         platform: 'kiro',
         accountId: context.accountId,
         upstreamResponseHeaders: JSON.stringify(upstreamResponseHeaders),
-        upstreamResponseBody: kiroResponseText,
+        upstreamResponseBody: sanitizedKiroResponse,
         clientResponseHeaders: JSON.stringify({ 'Content-Type': 'application/json' }),
         cacheReadTokens: 0,
         cacheCreationTokens: 0,

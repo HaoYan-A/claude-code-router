@@ -140,7 +140,12 @@ class LogBuffer {
         logger.error({ err }, 'Failed to update daily usage')
       );
     } catch (error) {
-      logger.error({ error, count: batch.length }, 'Failed to flush log buffer');
+      // 记录详细错误信息
+      const errorDetail = error instanceof Error ? {
+        name: error.name,
+        message: error.message,
+      } : error;
+      logger.error({ error: errorDetail, count: batch.length }, 'Failed to flush log buffer');
 
       // 失败时尝试逐条写入
       for (const data of batch) {
@@ -151,7 +156,11 @@ class LogBuffer {
             data: updateData,
           });
         } catch (innerError) {
-          logger.error({ error: innerError, logId: data.id }, 'Failed to update single log');
+          const innerErrorDetail = innerError instanceof Error ? {
+            name: innerError.name,
+            message: innerError.message,
+          } : innerError;
+          logger.error({ error: innerErrorDetail, logId: data.id }, 'Failed to update single log');
         }
       }
     } finally {
