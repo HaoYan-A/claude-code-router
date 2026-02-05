@@ -3,10 +3,12 @@ import type {
   CreateAccountSchema,
   UpdateAccountSchema,
   OAuthExchangeSchema,
+  ImportKiroAccountSchema,
 } from '@claude-code-router/shared';
 import { ErrorCodes } from '@claude-code-router/shared';
 import { accountsRepository, type AccountListParams, type AccountWithQuotas } from './accounts.repository.js';
 import { antigravityService } from './platforms/antigravity.service.js';
+import { kiroService } from './platforms/kiro.service.js';
 import { AppError } from '../../middlewares/error.middleware.js';
 import { getAllPlatformModels } from '../../config/platforms.js';
 import { logger } from '../../lib/logger.js';
@@ -198,7 +200,92 @@ export class AccountsService {
       }
     }
 
+    if (account.platform === 'kiro') {
+      return this.refreshKiroToken(id, account);
+    }
+
     throw new AppError(400, ErrorCodes.VALIDATION_ERROR, `Unsupported platform: ${account.platform}`);
+  }
+
+  /**
+   * 刷新 Kiro 账号的 Token
+   */
+  private async refreshKiroToken(id: string, account: AccountWithQuotas) {
+    if (!account.kiroClientId || !account.kiroClientSecret || !account.kiroRegion) {
+      throw new AppError(400, ErrorCodes.ACCOUNT_AUTH_FAILED, 'Missing Kiro client credentials');
+    }
+
+    try {
+      const tokenResponse = await kiroService.refreshAccessToken(
+        account.refreshToken!,
+        account.kiroClientId,
+        account.kiroClientSecret,
+        account.kiroRegion
+      );
+
+      await accountsRepository.update(id, {
+        accessToken: tokenResponse.accessToken,
+        refreshToken: tokenResponse.refreshToken,
+        tokenExpiresAt: new Date(Date.now() + tokenResponse.expiresIn * 1000),
+        status: 'active',
+        errorMessage: null,
+      });
+
+      return { success: true, message: 'Kiro token refreshed successfully' };
+    } catch (error) {
+      await accountsRepository.update(id, {
+        status: 'expired',
+        errorMessage: error instanceof Error ? error.message : 'Token refresh failed',
+      });
+      throw error;
+    }
+  }
+
+  /**
+   * 导入 Kiro 账号（自动刷新 Token）
+   */
+  async importKiroAccount(input: ImportKiroAccountSchema) {
+    const { refreshToken, clientId, clientSecret, clientIdHash, region, name, priority = 50, schedulable = true } = input;
+
+    // 1. 检查是否已存在（使用 clientIdHash 作为 platformId）
+    const existing = await accountsRepository.findByPlatformId('kiro', clientIdHash);
+    if (existing) {
+      throw new AppError(409, ErrorCodes.ACCOUNT_ALREADY_EXISTS, 'Kiro account already exists');
+    }
+
+    // 2. 使用 refreshToken 刷新获取 accessToken
+    const tokenResponse = await kiroService.refreshAccessToken(refreshToken, clientId, clientSecret, region);
+
+    // 3. 验证 Token 是否有效（获取模型列表）
+    const validation = await kiroService.validateAccount(tokenResponse.accessToken, region);
+    if (!validation.valid) {
+      throw new AppError(400, ErrorCodes.ACCOUNT_AUTH_FAILED, 'Invalid Kiro credentials');
+    }
+
+    // 4. 创建账号
+    const account = await accountsRepository.create({
+      platform: 'kiro',
+      platformId: clientIdHash,
+      name: name ?? `Kiro-${clientIdHash.substring(0, 8)}`,
+      accessToken: tokenResponse.accessToken,
+      refreshToken: tokenResponse.refreshToken || refreshToken,
+      tokenExpiresAt: new Date(Date.now() + tokenResponse.expiresIn * 1000),
+      kiroClientId: clientId,
+      kiroClientSecret: clientSecret,
+      kiroRegion: region,
+      status: 'active',
+      priority,
+      schedulable,
+    });
+
+    // 5. 保存模型额度（Kiro 按模型计算，暂时全部设为 100%）
+    for (const modelId of validation.models) {
+      await accountsRepository.upsertQuota(account.id, modelId, 100, null);
+    }
+
+    // 6. 重新获取带额度的账号
+    const result = await accountsRepository.findById(account.id);
+    return this.sanitizeAccount(result!);
   }
 
   /**
@@ -259,6 +346,44 @@ export class AccountsService {
         }
       } catch (error) {
         logger.warn({ accountId: id, error }, 'Failed to update subscription tier');
+      }
+
+      const result = await accountsRepository.findById(id);
+      return this.sanitizeAccount(result!);
+    }
+
+    if (refreshedAccount.platform === 'kiro') {
+      // Kiro 平台：获取模型列表作为额度信息
+      let currentAccessToken = refreshedAccount.accessToken;
+
+      try {
+        const models = await kiroService.listModels(currentAccessToken, refreshedAccount.kiroRegion!);
+
+        // 更新模型额度（Kiro 暂时全部设为 100%）
+        for (const model of models) {
+          await accountsRepository.upsertQuota(id, model.modelId, 100, null);
+        }
+      } catch (error) {
+        // Token 过期时自动刷新并重试
+        if (error instanceof AppError && (error.statusCode === 401 || error.statusCode === 403)) {
+          logger.info({ accountId: id }, 'Got 401/403, refreshing Kiro token and retrying...');
+          await this.refreshToken(id);
+
+          // 重新获取刷新后的账号
+          const retryAccount = await accountsRepository.findById(id);
+          if (!retryAccount || !retryAccount.accessToken) {
+            throw new AppError(500, ErrorCodes.ACCOUNT_AUTH_FAILED, 'Failed to refresh Kiro token');
+          }
+          currentAccessToken = retryAccount.accessToken;
+
+          // 重试获取模型列表
+          const models = await kiroService.listModels(currentAccessToken, retryAccount.kiroRegion!);
+          for (const model of models) {
+            await accountsRepository.upsertQuota(id, model.modelId, 100, null);
+          }
+        } else {
+          throw error;
+        }
       }
 
       const result = await accountsRepository.findById(id);

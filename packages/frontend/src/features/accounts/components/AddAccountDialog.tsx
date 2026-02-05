@@ -12,8 +12,9 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import { ExternalLink, Copy, Check, Loader2, KeyRound, Globe } from 'lucide-react';
+import { ExternalLink, Copy, Check, Loader2, KeyRound, Globe, FileUp } from 'lucide-react';
 import { useOAuthUrl, useOAuthExchange, useCreateAccount } from '@/lib/queries/accounts';
+import { KiroImportForm } from './KiroImportForm';
 
 interface AddAccountDialogProps {
   open: boolean;
@@ -21,7 +22,7 @@ interface AddAccountDialogProps {
 }
 
 export function AddAccountDialog({ open, onOpenChange }: AddAccountDialogProps) {
-  const [tab, setTab] = useState<'oauth' | 'manual'>('oauth');
+  const [tab, setTab] = useState<'oauth' | 'manual' | 'kiro'>('oauth');
 
   // OAuth state
   const [codeUrl, setCodeUrl] = useState('');
@@ -101,14 +102,14 @@ export function AddAccountDialog({ open, onOpenChange }: AddAccountDialogProps) 
     <Dialog open={open} onOpenChange={handleClose}>
       <DialogContent className="sm:max-w-[520px]">
         <DialogHeader>
-          <DialogTitle>添加 Antigravity 账户</DialogTitle>
+          <DialogTitle>添加第三方账户</DialogTitle>
           <DialogDescription>
-            连接您的 Antigravity 账户以使用其 API 配额
+            连接您的第三方账户以使用其 API 配额
           </DialogDescription>
         </DialogHeader>
 
-        <Tabs value={tab} onValueChange={(v) => setTab(v as 'oauth' | 'manual')}>
-          <TabsList className="grid w-full grid-cols-2">
+        <Tabs value={tab} onValueChange={(v) => setTab(v as 'oauth' | 'manual' | 'kiro')}>
+          <TabsList className="grid w-full grid-cols-3">
             <TabsTrigger value="oauth" className="flex items-center gap-2">
               <Globe className="h-4 w-4" />
               OAuth 授权
@@ -116,6 +117,10 @@ export function AddAccountDialog({ open, onOpenChange }: AddAccountDialogProps) 
             <TabsTrigger value="manual" className="flex items-center gap-2">
               <KeyRound className="h-4 w-4" />
               手动令牌
+            </TabsTrigger>
+            <TabsTrigger value="kiro" className="flex items-center gap-2">
+              <FileUp className="h-4 w-4" />
+              Kiro 导入
             </TabsTrigger>
           </TabsList>
 
@@ -304,6 +309,10 @@ export function AddAccountDialog({ open, onOpenChange }: AddAccountDialogProps) 
                 </Button>
               </DialogFooter>
             </form>
+          </TabsContent>
+
+          <TabsContent value="kiro" className="mt-4">
+            <KiroImportForm onSuccess={handleClose} onCancel={handleClose} />
           </TabsContent>
         </Tabs>
       </DialogContent>

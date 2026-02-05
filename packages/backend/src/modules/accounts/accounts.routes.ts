@@ -6,6 +6,7 @@ import {
   oauthExchangeSchema,
   availableAccountQuerySchema,
   idParamSchema,
+  importKiroAccountSchema,
 } from '@claude-code-router/shared';
 import { accountsController } from './accounts.controller.js';
 import { validate } from '../../middlewares/validate.middleware.js';
@@ -38,6 +39,13 @@ router.post(
   '/antigravity/exchange',
   validate(oauthExchangeSchema),
   asyncHandler((req, res) => accountsController.exchangeOAuthCode(req, res))
+);
+
+// Kiro 账号导入
+router.post(
+  '/kiro/import',
+  validate(importKiroAccountSchema),
+  asyncHandler((req, res) => accountsController.importKiroAccount(req, res))
 );
 
 // 批量刷新所有账号额度

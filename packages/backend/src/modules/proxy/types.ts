@@ -237,8 +237,13 @@ export interface ProxyContext {
 
 export interface SelectedAccount {
   id: string;
+  platform: 'antigravity' | 'kiro';
   accessToken: string;
   projectId: string;
   refreshToken: string;
   tokenExpiresAt: Date | null;
+  // Kiro 特有字段
+  kiroClientId?: string;
+  kiroClientSecret?: string;
+  kiroRegion?: string;
 }

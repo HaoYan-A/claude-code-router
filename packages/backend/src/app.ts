@@ -83,7 +83,7 @@ export function createApp(): Express {
   // SPA fallback - 所有非 API/proxy 路由返回 index.html
   app.get('*', (req, res, next) => {
     // 跳过 API 和 proxy 路由
-    if (req.path.startsWith('/api') || req.path.startsWith('/proxy') || req.path === '/health') {
+    if (req.path.startsWith('/api/') || req.path.startsWith('/proxy') || req.path === '/health') {
       return next();
     }
     res.sendFile(path.join(publicPath, 'index.html'), (err) => {

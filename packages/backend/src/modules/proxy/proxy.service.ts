@@ -6,9 +6,10 @@
  * 2. 从请求体提取模型 slot (opus/sonnet/haiku)
  * 3. 根据 API Key 的 ModelMapping 找到映射
  * 4. 选择可用的 ThirdPartyAccount
- * 5. 转换请求格式并转发到 Antigravity API
- * 6. 转换响应格式返回给客户端
- * 7. 记录日志
+ * 5. 根据平台类型选择 channel (Antigravity/Kiro)
+ * 6. 转换请求格式并转发
+ * 7. 转换响应格式返回给客户端
+ * 8. 记录日志
  */
 
 import type { Response } from 'express';
@@ -19,6 +20,7 @@ import { logBuffer } from '../log/log-buffer.js';
 import { apiKeyRepository } from '../api-key/api-key.repository.js';
 import { accountSelector } from './account-selector.js';
 import { getProxyAgent } from '../../lib/proxy-agent.js';
+// Antigravity channel
 import {
   convertClaudeToGemini,
   extractModelSlot,
@@ -32,7 +34,17 @@ import {
   STREAM_PATH,
   NON_STREAM_PATH,
 } from './channels/antigravity/models.js';
-import type { ClaudeRequest, ProxyContext, ModelSlot } from './types.js';
+// Kiro channel
+import {
+  convertClaudeToKiro,
+  handleKiroSSEStream,
+  transformKiroResponse,
+  getKiroEndpoint,
+  KIRO_GENERATE_PATH,
+} from './channels/kiro/index.js';
+import { getKiroHeaders } from '../accounts/platforms/kiro.service.js';
+import type { ClaudeRequest, ProxyContext, ModelSlot, MessageContent, SystemPrompt } from './types.js';
+import type { SelectedAccount } from './types.js';
 
 // 最大重试次数
 const MAX_RETRIES = 2;
@@ -65,6 +77,55 @@ function sanitizeHeaders(headers: Record<string, string>): Record<string, string
     }
   }
   return sanitized;
+}
+
+function extractSystemText(system?: SystemPrompt): string {
+  if (!system) return '';
+  if (typeof system === 'string') return system;
+  return system
+    .filter((block) => block.type === 'text')
+    .map((block) => block.text)
+    .join('\n\n');
+}
+
+function extractTextFromContent(content: MessageContent): string {
+  if (typeof content === 'string') return content;
+  const parts: string[] = [];
+  for (const block of content) {
+    if (block.type === 'text' && block.text) {
+      parts.push(block.text);
+      continue;
+    }
+    if (block.type === 'tool_result') {
+      const toolContent = (block.content ?? '') as unknown;
+      if (typeof toolContent === 'string') {
+        parts.push(toolContent);
+      } else if (Array.isArray(toolContent)) {
+        const text = toolContent
+          .map((item: unknown) => {
+            if (typeof item === 'object' && item !== null) {
+              const typedItem = item as { type?: string; text?: string };
+              if (typedItem.type === 'text' && typedItem.text) {
+                return typedItem.text;
+              }
+            }
+            return '';
+          })
+          .filter(Boolean)
+          .join('\n');
+        if (text) parts.push(text);
+      }
+      continue;
+    }
+    if (block.type === 'tool_use') {
+      const inputText = typeof block.input === 'string'
+        ? block.input
+        : JSON.stringify(block.input ?? {});
+      if (inputText) parts.push(inputText);
+      continue;
+    }
+  }
+  return parts.join('\n');
 }
 
 export class ProxyService {
@@ -142,7 +203,7 @@ export class ProxyService {
         originalModel: claudeReq.model,
         modelSlot,
         targetModel: mapping.targetModel,
-        platform: mapping.platform,
+        platform: account.platform, // 使用账号的 platform
         accountId: account.id,
         accessToken: account.accessToken,
         projectId: account.projectId,
@@ -153,7 +214,7 @@ export class ProxyService {
       };
 
       // 5. 执行代理请求（带重试）
-      await this.executeWithRetry(claudeReq, context, res);
+      await this.executeWithRetry(claudeReq, context, res, account);
     } catch (error) {
       const durationMs = Date.now() - startTime;
 
@@ -211,46 +272,33 @@ export class ProxyService {
   private async executeWithRetry(
     claudeReq: ClaudeRequest,
     context: ProxyContext,
-    res: Response
+    res: Response,
+    initialAccount: SelectedAccount
   ): Promise<void> {
-    let lastError: Error | null = null;
-    let currentAccount = {
-      id: context.accountId,
-      accessToken: context.accessToken,
-      projectId: context.projectId,
-    };
+    let currentAccount = initialAccount;
+    const triedAccountIds = new Set<string>([initialAccount.id]);
+    let retryCount = 0;
 
-    for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
-      const isRetry = attempt > 0;
-
-      if (isRetry) {
-        logger.info(
-          { attempt, accountId: currentAccount.id },
-          'Retrying proxy request'
-        );
-
-        // 尝试选择新账号
-        const newAccount = await accountSelector.selectAccount(context.targetModel);
-        if (newAccount && newAccount.id !== currentAccount.id) {
-          currentAccount = newAccount;
-          logger.info(
-            { newAccountId: newAccount.id },
-            'Switched to new account for retry'
+    while (true) {
+      try {
+        // 根据平台类型选择不同的执行方法
+        if (currentAccount.platform === 'kiro') {
+          await this.executeKiroProxy(
+            claudeReq,
+            { ...context, platform: 'kiro', accountId: currentAccount.id, accessToken: currentAccount.accessToken, projectId: currentAccount.projectId },
+            res,
+            currentAccount
+          );
+        } else {
+          await this.executeAntigravityProxy(
+            claudeReq,
+            { ...context, platform: 'antigravity', accountId: currentAccount.id, accessToken: currentAccount.accessToken, projectId: currentAccount.projectId },
+            res,
+            retryCount > 0
           );
         }
-      }
-
-      try {
-        await this.executeProxy(
-          claudeReq,
-          { ...context, ...currentAccount },
-          res,
-          isRetry
-        );
         return; // 成功则返回
       } catch (error) {
-        lastError = error instanceof Error ? error : new Error('Unknown error');
-
         // 判断是否可重试
         if (error instanceof ProxyError) {
           const canRetry = await accountSelector.handleRequestFailure(
@@ -259,22 +307,44 @@ export class ProxyService {
             error.message
           );
 
-          if (!canRetry || attempt >= MAX_RETRIES) {
+          if (!canRetry) {
             throw error;
           }
+
+          const allowRetryAll = error.statusCode === 429;
+          if (!allowRetryAll && retryCount >= MAX_RETRIES) {
+            throw error;
+          }
+
+          // 选择下一个账号（排除已尝试）
+          const nextAccount = await accountSelector.selectAccountWithOptions(
+            context.targetModel,
+            { excludeIds: Array.from(triedAccountIds) }
+          );
+          if (!nextAccount) {
+            throw error;
+          }
+          currentAccount = nextAccount;
+          triedAccountIds.add(nextAccount.id);
+          if (!allowRetryAll) {
+            retryCount += 1;
+          }
+          logger.info(
+            { newAccountId: nextAccount.id, platform: nextAccount.platform },
+            'Switched to new account for retry'
+          );
+          continue;
         } else {
           throw error;
         }
       }
     }
-
-    throw lastError || new Error('Max retries exceeded');
   }
 
   /**
-   * 执行单次代理请求
+   * 执行 Antigravity 平台代理请求
    */
-  private async executeProxy(
+  private async executeAntigravityProxy(
     claudeReq: ClaudeRequest,
     context: ProxyContext & { accessToken: string; projectId: string },
     res: Response,
@@ -298,7 +368,7 @@ export class ProxyService {
     const path = isStream ? STREAM_PATH : NON_STREAM_PATH;
     const url = `${endpoint}${path}`;
 
-    // 构建上游请求头（用于日志记录，脱敏处理）
+    // 构建上游请求头
     const upstreamHeaders: Record<string, string> = {
       Host: 'daily-cloudcode-pa.sandbox.googleapis.com',
       'X-App': 'cli',
@@ -312,12 +382,10 @@ export class ProxyService {
       'X-Stainless-Runtime-Version': '3.11.0',
     };
 
-    // 记录上游请求数据（异步，不阻塞请求）
-    // 上游请求头完整记录（包含 accessToken），用于问题排查
     const upstreamRequestHeadersStr = JSON.stringify(upstreamHeaders);
     const upstreamRequestBodyStr = JSON.stringify(geminiBody);
 
-    // 更新日志记录，保存上游请求数据
+    // 更新日志记录
     logRepository.update(context.logId, {
       upstreamRequestHeaders: upstreamRequestHeadersStr,
       upstreamRequestBody: upstreamRequestBodyStr,
@@ -326,6 +394,7 @@ export class ProxyService {
     logger.debug(
       {
         url,
+        platform: 'antigravity',
         targetModel: context.targetModel,
         isStream,
         isThinkingEnabled,
@@ -334,7 +403,7 @@ export class ProxyService {
       'Sending request to Antigravity'
     );
 
-    // 发送请求（支持代理）
+    // 发送请求
     const proxyAgent = getProxyAgent();
     const fetchOptions: RequestInit & { dispatcher?: unknown } = {
       method: 'POST',
@@ -378,7 +447,6 @@ export class ProxyService {
     const durationMs = Date.now() - context.startTime;
 
     if (isStream && response.body) {
-      // 流式响应 - 先设置请求 ID 头
       res.setHeader('X-Request-Id', context.logId);
 
       const result = await handleSSEStream(
@@ -393,7 +461,6 @@ export class ProxyService {
         }
       );
 
-      // 添加到日志缓冲区（批量写入，包含完整的请求响应数据）
       logBuffer.add({
         id: context.logId,
         status: 'success',
@@ -404,24 +471,18 @@ export class ProxyService {
         targetModel: context.targetModel,
         platform: context.platform,
         accountId: context.accountId,
-        // 上游请求数据（在创建日志时已记录 clientHeaders）
         upstreamResponseHeaders: JSON.stringify(upstreamResponseHeaders),
         upstreamResponseBody: result.upstreamResponseBody,
-        // 客户端响应
         clientResponseHeaders: JSON.stringify({ 'Content-Type': 'text/event-stream' }),
         responseBody: result.clientResponseBody,
-        // 缓存 Token (映射后)
         cacheReadTokens: result.cacheReadTokens,
         cacheCreationTokens: 0,
-        // 原始 Token (用于对账)
         rawInputTokens: result.rawInputTokens,
         rawOutputTokens: result.rawOutputTokens,
         rawCacheTokens: result.rawCacheTokens,
-        // API Key ID（用于日度聚合）
         apiKeyId: context.apiKeyId,
       });
 
-      // 异步更新账号统计（包含缓存 token）
       accountSelector.updateUsageStats(
         context.accountId,
         result.inputTokens,
@@ -429,7 +490,6 @@ export class ProxyService {
         result.cacheReadTokens || 0
       ).catch((err) => logger.error({ err, accountId: context.accountId }, 'Failed to update account stats'));
     } else {
-      // 非流式响应
       const geminiResponseText = await response.text();
       const geminiResponse = JSON.parse(geminiResponseText);
       const claudeResponse = await transformNonStreamingResponse(geminiResponse, {
@@ -440,17 +500,14 @@ export class ProxyService {
         contextLimit: 1_048_576,
       });
 
-      // 先返回响应给客户端（包含请求 ID 头）
       res.setHeader('X-Request-Id', context.logId);
       res.json(claudeResponse);
 
-      // 提取原始 Token
       const rawUsage = geminiResponse.usageMetadata || {};
       const rawInputTokens = rawUsage.promptTokenCount || 0;
       const rawOutputTokens = rawUsage.candidatesTokenCount || 0;
       const rawCacheTokens = rawUsage.cachedContentTokenCount || 0;
 
-      // 添加到日志缓冲区（批量写入，包含完整的请求响应数据）
       logBuffer.add({
         id: context.logId,
         status: 'success',
@@ -462,28 +519,210 @@ export class ProxyService {
         targetModel: context.targetModel,
         platform: context.platform,
         accountId: context.accountId,
-        // 上游响应数据
         upstreamResponseHeaders: JSON.stringify(upstreamResponseHeaders),
         upstreamResponseBody: geminiResponseText,
-        // 客户端响应
         clientResponseHeaders: JSON.stringify({ 'Content-Type': 'application/json' }),
-        // 缓存 Token (映射后)
         cacheReadTokens: claudeResponse.usage.cache_read_input_tokens || 0,
         cacheCreationTokens: 0,
-        // 原始 Token (用于对账)
         rawInputTokens,
         rawOutputTokens,
         rawCacheTokens,
-        // API Key ID（用于日度聚合）
         apiKeyId: context.apiKeyId,
       });
 
-      // 异步更新账号统计（包含缓存 token）
       accountSelector.updateUsageStats(
         context.accountId,
         claudeResponse.usage.input_tokens,
         claudeResponse.usage.output_tokens,
         claudeResponse.usage.cache_read_input_tokens || 0
+      ).catch((err) => logger.error({ err, accountId: context.accountId }, 'Failed to update account stats'));
+    }
+  }
+
+  /**
+   * 执行 Kiro 平台代理请求
+   */
+  private async executeKiroProxy(
+    claudeReq: ClaudeRequest,
+    context: ProxyContext & { accessToken: string; projectId: string },
+    res: Response,
+    account: SelectedAccount
+  ): Promise<void> {
+    const isStream = claudeReq.stream === true;
+    const region = account.kiroRegion || 'us-east-1';
+    const inputTokens = this.estimateInputTokens(claudeReq);
+
+    // 转换请求
+    const { body: kiroBody, kiroModelId } = convertClaudeToKiro(claudeReq, {
+      conversationId: context.sessionId,
+      enableThinking: true,  // 始终启用 thinking
+    });
+
+    // 构建 URL
+    const endpoint = getKiroEndpoint(region);
+    const url = `${endpoint}${KIRO_GENERATE_PATH}`;
+
+    // 构建上游请求头
+    const upstreamHeaders = getKiroHeaders(context.accessToken);
+
+    const upstreamRequestHeadersStr = JSON.stringify(upstreamHeaders);
+    const upstreamRequestBodyStr = JSON.stringify(kiroBody);
+
+    // 更新日志记录
+    logRepository.update(context.logId, {
+      upstreamRequestHeaders: upstreamRequestHeadersStr,
+      upstreamRequestBody: upstreamRequestBodyStr,
+    }).catch((err) => logger.error({ err, logId: context.logId }, 'Failed to update upstream request data'));
+
+    logger.info(
+      {
+        url,
+        platform: 'kiro',
+        region,
+        kiroModelId,
+        isStream,
+        messageCount: context.messageCount,
+        requestBodyPreview: upstreamRequestBodyStr.substring(0, 1000),
+      },
+      'Sending request to Kiro'
+    );
+
+    // 发送请求
+    const proxyAgent = getProxyAgent();
+    const fetchOptions: RequestInit & { dispatcher?: unknown } = {
+      method: 'POST',
+      headers: upstreamHeaders,
+      body: upstreamRequestBodyStr,
+    };
+    if (proxyAgent) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      fetchOptions.dispatcher = proxyAgent as any;
+    }
+    const response = await fetch(url, fetchOptions);
+
+    // 收集上游响应头
+    const upstreamResponseHeaders: Record<string, string> = {};
+    response.headers.forEach((value, key) => {
+      upstreamResponseHeaders[key] = value;
+    });
+
+    // 处理错误响应
+    if (!response.ok) {
+      const errorBody = await response.text();
+      logger.error(
+        {
+          statusCode: response.status,
+          errorBody,
+          accountId: context.accountId,
+          url,
+          kiroModelId,
+          fullRequestBody: upstreamRequestBodyStr, // 添加完整请求体便于调试
+        },
+        'Kiro API error'
+      );
+
+      throw new ProxyError(
+        response.status,
+        'UPSTREAM_ERROR',
+        `Kiro API error: ${response.status} - ${errorBody.substring(0, 200)}`
+      );
+    }
+
+    // 处理响应
+    const durationMs = Date.now() - context.startTime;
+
+    if (isStream && response.body) {
+      res.setHeader('X-Request-Id', context.logId);
+
+      const result = await handleKiroSSEStream(
+        response.body,
+        res,
+        {
+          sessionId: context.sessionId,
+          modelName: kiroModelId,
+          messageCount: context.messageCount,
+          inputTokens,
+        }
+      );
+
+      // Kiro 返回的是 AWS 二进制 SSE 格式，包含 null 字节，需要转为 base64 存储
+      const sanitizedUpstreamBody = result.upstreamResponseBody
+        ? `base64:${Buffer.from(result.upstreamResponseBody).toString('base64')}`
+        : undefined;
+
+      logBuffer.add({
+        id: context.logId,
+        status: 'success',
+        statusCode: 200,
+        inputTokens: result.inputTokens,
+        outputTokens: result.outputTokens,
+        durationMs,
+        targetModel: kiroModelId,
+        platform: 'kiro',
+        accountId: context.accountId,
+        upstreamResponseHeaders: JSON.stringify(upstreamResponseHeaders),
+        upstreamResponseBody: sanitizedUpstreamBody,
+        clientResponseHeaders: JSON.stringify({ 'Content-Type': 'text/event-stream' }),
+        responseBody: result.clientResponseBody,
+        cacheReadTokens: 0,
+        cacheCreationTokens: 0,
+        rawInputTokens: result.inputTokens,
+        rawOutputTokens: result.outputTokens,
+        rawCacheTokens: 0,
+        apiKeyId: context.apiKeyId,
+      });
+
+      accountSelector.updateUsageStats(
+        context.accountId,
+        result.inputTokens,
+        result.outputTokens,
+        0
+      ).catch((err) => logger.error({ err, accountId: context.accountId }, 'Failed to update account stats'));
+    } else {
+      // 非流式响应
+      const kiroResponseText = await response.text();
+      const claudeResponse = await transformKiroResponse(kiroResponseText, {
+        sessionId: context.sessionId,
+        modelName: kiroModelId,
+        messageCount: context.messageCount,
+        inputTokens,
+      });
+
+      res.setHeader('X-Request-Id', context.logId);
+      res.json(claudeResponse);
+
+      // Kiro 返回的是 AWS 二进制 SSE 格式，包含 null 字节，需要转为 base64 存储
+      const sanitizedKiroResponse = kiroResponseText
+        ? `base64:${Buffer.from(kiroResponseText).toString('base64')}`
+        : undefined;
+
+      logBuffer.add({
+        id: context.logId,
+        status: 'success',
+        statusCode: 200,
+        responseBody: JSON.stringify(claudeResponse),
+        inputTokens: claudeResponse.usage.input_tokens,
+        outputTokens: claudeResponse.usage.output_tokens,
+        durationMs,
+        targetModel: kiroModelId,
+        platform: 'kiro',
+        accountId: context.accountId,
+        upstreamResponseHeaders: JSON.stringify(upstreamResponseHeaders),
+        upstreamResponseBody: sanitizedKiroResponse,
+        clientResponseHeaders: JSON.stringify({ 'Content-Type': 'application/json' }),
+        cacheReadTokens: 0,
+        cacheCreationTokens: 0,
+        rawInputTokens: claudeResponse.usage.input_tokens,
+        rawOutputTokens: claudeResponse.usage.output_tokens,
+        rawCacheTokens: 0,
+        apiKeyId: context.apiKeyId,
+      });
+
+      accountSelector.updateUsageStats(
+        context.accountId,
+        claudeResponse.usage.input_tokens,
+        claudeResponse.usage.output_tokens,
+        0
       ).catch((err) => logger.error({ err, accountId: context.accountId }, 'Failed to update account stats'));
     }
   }
@@ -519,6 +758,21 @@ export class ProxyService {
 
     // 否则生成新的
     return `session-${uuidv4()}`;
+  }
+
+  private estimateInputTokens(req: ClaudeRequest): number {
+    const parts: string[] = [];
+    const systemText = extractSystemText(req.system);
+    if (systemText) parts.push(systemText);
+
+    for (const msg of req.messages) {
+      const text = extractTextFromContent(msg.content);
+      if (text) parts.push(text);
+    }
+
+    const totalText = parts.join('\n');
+    if (!totalText) return 0;
+    return Math.ceil(totalText.length / 4);
   }
 }
 
