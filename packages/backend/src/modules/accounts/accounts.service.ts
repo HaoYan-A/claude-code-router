@@ -11,6 +11,7 @@ import { antigravityService } from './platforms/antigravity.service.js';
 import { kiroService } from './platforms/kiro.service.js';
 import { AppError } from '../../middlewares/error.middleware.js';
 import { getAllPlatformModels } from '../../config/platforms.js';
+import { randomUUID } from 'crypto';
 import { logger } from '../../lib/logger.js';
 
 export class AccountsService {
@@ -247,25 +248,19 @@ export class AccountsService {
   async importKiroAccount(input: ImportKiroAccountSchema) {
     const { refreshToken, clientId, clientSecret, clientIdHash, region, name, priority = 50, schedulable = true } = input;
 
-    // 1. 检查是否已存在（使用 clientIdHash 作为 platformId）
-    const existing = await accountsRepository.findByPlatformId('kiro', clientIdHash);
-    if (existing) {
-      throw new AppError(409, ErrorCodes.ACCOUNT_ALREADY_EXISTS, 'Kiro account already exists');
-    }
-
-    // 2. 使用 refreshToken 刷新获取 accessToken
+    // 1. 使用 refreshToken 刷新获取 accessToken
     const tokenResponse = await kiroService.refreshAccessToken(refreshToken, clientId, clientSecret, region);
 
-    // 3. 验证 Token 是否有效（获取模型列表）
+    // 2. 验证 Token 是否有效（获取模型列表）
     const validation = await kiroService.validateAccount(tokenResponse.accessToken, region);
     if (!validation.valid) {
       throw new AppError(400, ErrorCodes.ACCOUNT_AUTH_FAILED, 'Invalid Kiro credentials');
     }
 
-    // 4. 创建账号
+    // 3. 创建账号（使用 clientIdHash + uuid 短码保证 platformId 唯一）
     const account = await accountsRepository.create({
       platform: 'kiro',
-      platformId: clientIdHash,
+      platformId: `${clientIdHash}-${randomUUID().substring(0, 8)}`,
       name: name ?? `Kiro-${clientIdHash.substring(0, 8)}`,
       accessToken: tokenResponse.accessToken,
       refreshToken: tokenResponse.refreshToken || refreshToken,

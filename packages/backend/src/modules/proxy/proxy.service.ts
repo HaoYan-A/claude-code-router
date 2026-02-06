@@ -170,8 +170,9 @@ export class ProxyService {
       clientHeaders: JSON.stringify(sanitizeHeaders(options.headers)),
     });
 
-    // 用于在错误处理时记录 targetModel（即使账号选择失败也能获取）
+    // 用于在错误处理时记录 targetModel 和 accountId（即使后续步骤失败也能获取）
     let resolvedTargetModel: string | undefined;
+    let resolvedAccountId: string | undefined;
 
     try {
       // 1. 提取模型 slot
@@ -198,6 +199,7 @@ export class ProxyService {
           `No available account for model: ${mapping.targetModel}`
         );
       }
+      resolvedAccountId = account.id;
 
       // 4. 构建代理上下文
       const context: ProxyContext = {
@@ -270,6 +272,7 @@ export class ProxyService {
           errorMessage: error instanceof Error ? error.message : 'Unknown error',
           durationMs,
           targetModel: resolvedTargetModel,
+          accountId: resolvedAccountId,
         });
       }
     }
