@@ -569,6 +569,7 @@ export class ProxyService {
     const { body: kiroBody, kiroModelId } = convertClaudeToKiro(claudeReq, {
       conversationId: context.sessionId,
       enableThinking: true,  // 始终启用 thinking
+      targetModel: context.targetModel,
     });
 
     // 构建 URL

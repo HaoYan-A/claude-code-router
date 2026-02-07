@@ -44,6 +44,7 @@ import { logger } from '../../../../lib/logger.js';
 export interface KiroConvertOptions {
   conversationId?: string;
   enableThinking?: boolean;
+  targetModel?: string;
 }
 
 export interface KiroConvertResult {
@@ -58,7 +59,7 @@ export function convertClaudeToKiro(
   claudeReq: ClaudeRequest,
   options: KiroConvertOptions = {}
 ): KiroConvertResult {
-  const { conversationId = uuidv4() } = options;
+  const { conversationId = uuidv4(), targetModel } = options;
 
   // 从请求中读取 thinking 配置
   // 如果 thinking.type === 'enabled' 或未设置，则启用 thinking
@@ -66,8 +67,8 @@ export function convertClaudeToKiro(
   const enableThinking = !thinkingConfig || thinkingConfig.type !== 'disabled';
   const thinkingBudgetTokens = thinkingConfig?.budget_tokens;
 
-  // 1. 映射模型 ID
-  const kiroModelId = mapModelId(claudeReq.model);
+  // 1. 映射模型 ID（优先使用映射配置中的 targetModel）
+  const kiroModelId = targetModel || mapModelId(claudeReq.model);
 
   // 2. 提取 system prompt
   const systemPrompt = extractSystemPrompt(claudeReq.system);
@@ -144,6 +145,9 @@ function mapModelId(claudeModel: string): string {
   }
 
   // 模糊匹配
+  if (normalizedModel.includes('opus-4.6') || normalizedModel.includes('opus-4-6')) {
+    return 'claude-opus-4.6';
+  }
   if (normalizedModel.includes('opus-4.5') || normalizedModel.includes('opus-4-5') || normalizedModel.includes('opus')) {
     return 'claude-opus-4.5';
   }
