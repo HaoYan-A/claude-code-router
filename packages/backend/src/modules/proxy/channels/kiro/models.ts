@@ -165,6 +165,7 @@ export const KIRO_MODELS_PATH = '/ListAvailableModels?origin=AI_EDITOR';
  * - claude-sonnet-4.5
  * - claude-haiku-4.5
  * - claude-opus-4.5
+ * - claude-opus-4.6
  */
 export const CLAUDE_TO_KIRO_MODEL_MAP: Record<string, string> = {
   // Claude Sonnet 4
@@ -174,6 +175,10 @@ export const CLAUDE_TO_KIRO_MODEL_MAP: Record<string, string> = {
   // Claude Sonnet 4.5
   'claude-sonnet-4-5': 'claude-sonnet-4.5',
   'claude-sonnet-4.5': 'claude-sonnet-4.5',
+
+  // Claude Opus 4.6
+  'claude-opus-4-6': 'claude-opus-4.6',
+  'claude-opus-4.6': 'claude-opus-4.6',
 
   // Claude Opus 4.5
   'claude-opus-4-5-20250220': 'claude-opus-4.5',

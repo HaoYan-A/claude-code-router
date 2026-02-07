@@ -32,6 +32,13 @@
       "cacheRead": 0.20,
       "cacheStorage": 4.50
     },
+    "claude-opus-4.6": {
+      "description": "Kiro 平台 - Claude Opus 4.6",
+      "input": 5.00,
+      "output": 25.00,
+      "cacheRead": 0.50,
+      "cacheWrite": 6.25
+    },
     "claude-opus-4.5": {
       "description": "Kiro 平台 - Claude Opus 4.5（与官方定价一致）",
       "input": 5.00,
