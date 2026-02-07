@@ -22,7 +22,7 @@ enum RequestStatus {
 enum AccountPlatform {
   antigravity
   kiro
-  // 未来可扩展: claude, openai, gemini 等
+  openai
 }
 
 // 第三方账号状态
@@ -152,8 +152,9 @@ model ApiKeyModelMapping {
   apiKeyId    String   @map("api_key_id")
   claudeModel String   @map("claude_model") // "opus" | "sonnet" | "haiku"
   platform    String // "antigravity" | "kiro"
-  targetModel String   @map("target_model") // e.g., "claude-opus-4.5"
-  createdAt   DateTime @default(now()) @map("created_at")
+  targetModel     String   @map("target_model") // e.g., "claude-opus-4.5"
+  reasoningEffort String?  @map("reasoning_effort")
+  createdAt       DateTime @default(now()) @map("created_at")
   updatedAt   DateTime @updatedAt @map("updated_at")
 
   apiKey ApiKey @relation(fields: [apiKeyId], references: [id], onDelete: Cascade)
@@ -214,6 +215,10 @@ model ThirdPartyAccount {
   kiroClientId     String? @map("kiro_client_id")
   kiroClientSecret String? @map("kiro_client_secret")
   kiroRegion       String? @map("kiro_region") // 如 "us-east-1"
+
+  // OpenAI 特有字段（仅 OpenAI 平台使用）
+  openaiApiKey  String? @map("openai_api_key")
+  openaiBaseUrl String? @map("openai_base_url")
 
   // 使用统计（后续通过 log 同步）
   totalRequests     Int       @default(0) @map("total_requests")

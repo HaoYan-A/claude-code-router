@@ -1,3 +1,6 @@
+export const REASONING_EFFORTS = ['none', 'low', 'medium', 'high', 'auto'] as const;
+export type ReasoningEffort = (typeof REASONING_EFFORTS)[number];
+
 export const PLATFORMS = {
   antigravity: {
     id: 'antigravity',
@@ -17,6 +20,15 @@ export const PLATFORMS = {
       { id: 'claude-opus-4.5', name: 'Claude Opus 4.5' },
       { id: 'claude-sonnet-4.5', name: 'Claude Sonnet 4.5' },
       { id: 'claude-haiku-4.5', name: 'Claude Haiku 4.5' },
+    ],
+  },
+  openai: {
+    id: 'openai',
+    name: 'OpenAI',
+    models: [
+      { id: 'gpt-5.2-codex', name: 'GPT-5.2 Codex', reasoningEfforts: ['none', 'low', 'medium', 'high', 'auto'] as const },
+      { id: 'gpt-5.3-codex', name: 'GPT-5.3 Codex', reasoningEfforts: ['none', 'low', 'medium', 'high', 'auto'] as const },
+      { id: 'gpt-5.1-codex-mini', name: 'GPT-5.1 Codex Mini', reasoningEfforts: ['none', 'medium', 'high', 'auto'] as const },
     ],
   },
 } as const;

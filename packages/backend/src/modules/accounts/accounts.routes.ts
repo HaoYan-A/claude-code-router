@@ -7,6 +7,7 @@ import {
   availableAccountQuerySchema,
   idParamSchema,
   importKiroAccountSchema,
+  importOpenAIAccountSchema,
 } from '@claude-code-router/shared';
 import { accountsController } from './accounts.controller.js';
 import { validate } from '../../middlewares/validate.middleware.js';
@@ -46,6 +47,13 @@ router.post(
   '/kiro/import',
   validate(importKiroAccountSchema),
   asyncHandler((req, res) => accountsController.importKiroAccount(req, res))
+);
+
+// OpenAI 账号导入
+router.post(
+  '/openai/import',
+  validate(importOpenAIAccountSchema),
+  asyncHandler((req, res) => accountsController.importOpenAIAccount(req, res))
 );
 
 // 批量刷新所有账号额度

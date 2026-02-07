@@ -4,8 +4,9 @@ import { CLAUDE_MODEL_SLOTS, STATS_TIME_RANGES } from '../constants/models.js';
 // 模型映射 Schema
 export const modelMappingSchema = z.object({
   claudeModel: z.enum(CLAUDE_MODEL_SLOTS),
-  platform: z.enum(['antigravity', 'kiro']),
+  platform: z.enum(['antigravity', 'kiro', 'openai']),
   targetModel: z.string().min(1),
+  reasoningEffort: z.enum(['none', 'low', 'medium', 'high', 'auto']).optional(),
 });
 
 // 验证三个映射都存在

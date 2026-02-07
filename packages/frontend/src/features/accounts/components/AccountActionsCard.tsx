@@ -39,33 +39,37 @@ export function AccountActionsCard({ account, onEdit, onDeleted }: AccountAction
         <CardTitle className="text-lg">操作</CardTitle>
       </CardHeader>
       <CardContent className="space-y-2">
-        <Button
-          variant="outline"
-          className="w-full justify-start"
-          onClick={handleRefreshQuota}
-          disabled={isRefreshing}
-        >
-          {refreshQuotaMutation.isPending ? (
-            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-          ) : (
-            <RefreshCw className="mr-2 h-4 w-4" />
-          )}
-          刷新配额
-        </Button>
+        {account.platform !== 'openai' && (
+          <Button
+            variant="outline"
+            className="w-full justify-start"
+            onClick={handleRefreshQuota}
+            disabled={isRefreshing}
+          >
+            {refreshQuotaMutation.isPending ? (
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+            ) : (
+              <RefreshCw className="mr-2 h-4 w-4" />
+            )}
+            刷新配额
+          </Button>
+        )}
 
-        <Button
-          variant="outline"
-          className="w-full justify-start"
-          onClick={handleRefreshToken}
-          disabled={isRefreshing}
-        >
-          {refreshTokenMutation.isPending ? (
-            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-          ) : (
-            <Key className="mr-2 h-4 w-4" />
-          )}
-          刷新令牌
-        </Button>
+        {account.platform !== 'openai' && (
+          <Button
+            variant="outline"
+            className="w-full justify-start"
+            onClick={handleRefreshToken}
+            disabled={isRefreshing}
+          >
+            {refreshTokenMutation.isPending ? (
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+            ) : (
+              <Key className="mr-2 h-4 w-4" />
+            )}
+            刷新令牌
+          </Button>
+        )}
 
         <Button
           variant="outline"

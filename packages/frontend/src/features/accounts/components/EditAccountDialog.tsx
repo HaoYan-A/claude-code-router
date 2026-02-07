@@ -26,8 +26,12 @@ export function EditAccountDialog({ open, onOpenChange, account }: EditAccountDi
   const [isActive, setIsActive] = useState(true);
   const [priority, setPriority] = useState(50);
   const [schedulable, setSchedulable] = useState(true);
+  const [openaiBaseUrl, setOpenaiBaseUrl] = useState('');
+  const [openaiApiKey, setOpenaiApiKey] = useState('');
 
   const updateMutation = useUpdateAccount();
+
+  const isOpenAI = account?.platform === 'openai';
 
   // Sync form state when account changes
   useEffect(() => {
@@ -36,6 +40,8 @@ export function EditAccountDialog({ open, onOpenChange, account }: EditAccountDi
       setIsActive(account.isActive);
       setPriority(account.priority);
       setSchedulable(account.schedulable);
+      setOpenaiBaseUrl(account.openaiBaseUrl || '');
+      setOpenaiApiKey(account.openaiApiKey || '');
     }
   }, [account]);
 
@@ -50,6 +56,8 @@ export function EditAccountDialog({ open, onOpenChange, account }: EditAccountDi
         isActive,
         priority,
         schedulable,
+        ...(isOpenAI && openaiBaseUrl ? { openaiBaseUrl } : {}),
+        ...(isOpenAI && openaiApiKey ? { openaiApiKey } : {}),
       },
     });
     onOpenChange(false);
@@ -82,6 +90,30 @@ export function EditAccountDialog({ open, onOpenChange, account }: EditAccountDi
                 onChange={(e) => setName(e.target.value)}
               />
             </div>
+
+            {isOpenAI && (
+              <>
+                <div className="space-y-2">
+                  <Label htmlFor="edit-base-url">API Base URL</Label>
+                  <Input
+                    id="edit-base-url"
+                    placeholder="https://api.openai.com/v1"
+                    value={openaiBaseUrl}
+                    onChange={(e) => setOpenaiBaseUrl(e.target.value)}
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="edit-api-key">API Key</Label>
+                  <Input
+                    id="edit-api-key"
+                    placeholder="sk-..."
+                    value={openaiApiKey}
+                    onChange={(e) => setOpenaiApiKey(e.target.value)}
+                  />
+                </div>
+              </>
+            )}
 
             <div className="flex items-center justify-between">
               <div className="space-y-0.5">

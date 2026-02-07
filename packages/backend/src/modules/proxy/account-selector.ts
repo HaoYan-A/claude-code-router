@@ -96,13 +96,17 @@ export class AccountSelector {
    * 准备账号（刷新 token 如果需要）
    */
   private async prepareAccount(account: AccountWithQuotas): Promise<SelectedAccount | null> {
-    // 检查必要字段
+    // 根据平台类型分发处理
+    if (account.platform === 'openai') {
+      return this.prepareOpenaiAccount(account);
+    }
+
+    // Antigravity 和 Kiro 需要 refreshToken
     if (!account.refreshToken) {
       logger.warn({ accountId: account.id }, 'Account missing refresh token');
       return null;
     }
 
-    // 根据平台类型分发处理
     if (account.platform === 'kiro') {
       return this.prepareKiroAccount(account);
     }
@@ -235,6 +239,33 @@ export class AccountSelector {
       kiroClientId: account.kiroClientId,
       kiroClientSecret: account.kiroClientSecret,
       kiroRegion: account.kiroRegion,
+    };
+  }
+
+  /**
+   * 准备 OpenAI 账号（无需 token 刷新，直接使用 API Key）
+   */
+  private async prepareOpenaiAccount(account: AccountWithQuotas): Promise<SelectedAccount | null> {
+    if (!account.openaiApiKey) {
+      logger.warn({ accountId: account.id }, 'OpenAI account missing API key');
+      return null;
+    }
+
+    // OpenAI 使用 API Key 认证，不需要 token 刷新
+    // 确保账号状态为 active
+    if (account.status !== 'active') {
+      await accountsRepository.update(account.id, { status: 'active' });
+    }
+
+    return {
+      id: account.id,
+      platform: 'openai',
+      accessToken: account.openaiApiKey, // 使用 apiKey 作为 accessToken
+      projectId: '', // OpenAI 不需要 projectId
+      refreshToken: '', // OpenAI 不需要 refreshToken
+      tokenExpiresAt: null,
+      openaiApiKey: account.openaiApiKey,
+      openaiBaseUrl: account.openaiBaseUrl || undefined,
     };
   }
 

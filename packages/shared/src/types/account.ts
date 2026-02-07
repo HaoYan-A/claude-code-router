@@ -3,7 +3,7 @@
  */
 
 // 平台类型
-export type AccountPlatform = 'antigravity' | 'kiro';
+export type AccountPlatform = 'antigravity' | 'kiro' | 'openai';
 
 // 账号状态
 export type AccountStatus = 'created' | 'active' | 'expired' | 'error';
@@ -51,6 +51,10 @@ export interface ThirdPartyAccount {
   totalCacheTokens: number;
   lastUsedAt: Date | null;
 
+  // OpenAI 特有字段
+  openaiApiKey: string | null;
+  openaiBaseUrl: string | null;
+
   // 时间戳
   createdAt: Date;
   updatedAt: Date;
@@ -74,6 +78,8 @@ export interface UpdateAccountInput {
   isActive?: boolean;
   priority?: number;
   schedulable?: boolean;
+  openaiBaseUrl?: string;
+  openaiApiKey?: string;
 }
 
 // OAuth 授权 URL 响应
@@ -122,6 +128,15 @@ export interface ImportKiroAccountInput {
   clientSecret: string;
   clientIdHash: string; // 用作 platformId
   region: string;
+  name?: string;
+  priority?: number;
+  schedulable?: boolean;
+}
+
+// OpenAI 导入相关类型
+export interface ImportOpenAIAccountInput {
+  apiBaseUrl: string;
+  apiKey: string;
   name?: string;
   priority?: number;
   schedulable?: boolean;

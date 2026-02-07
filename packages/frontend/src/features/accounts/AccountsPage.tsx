@@ -90,6 +90,7 @@ export function AccountsPage() {
           <TabsTrigger value="all">全部</TabsTrigger>
           <TabsTrigger value="antigravity">Antigravity</TabsTrigger>
           <TabsTrigger value="kiro">Kiro</TabsTrigger>
+          <TabsTrigger value="openai">OpenAI</TabsTrigger>
         </TabsList>
       </Tabs>
 

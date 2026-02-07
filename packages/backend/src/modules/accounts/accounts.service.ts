@@ -4,6 +4,7 @@ import type {
   UpdateAccountSchema,
   OAuthExchangeSchema,
   ImportKiroAccountSchema,
+  ImportOpenAIAccountSchema,
 } from '@claude-code-router/shared';
 import { ErrorCodes } from '@claude-code-router/shared';
 import { accountsRepository, type AccountListParams, type AccountWithQuotas } from './accounts.repository.js';
@@ -205,6 +206,10 @@ export class AccountsService {
       return this.refreshKiroToken(id, account);
     }
 
+    if (account.platform === 'openai') {
+      throw new AppError(400, ErrorCodes.VALIDATION_ERROR, 'OpenAI accounts do not support token refresh');
+    }
+
     throw new AppError(400, ErrorCodes.VALIDATION_ERROR, `Unsupported platform: ${account.platform}`);
   }
 
@@ -279,6 +284,27 @@ export class AccountsService {
     }
 
     // 6. 重新获取带额度的账号
+    const result = await accountsRepository.findById(account.id);
+    return this.sanitizeAccount(result!);
+  }
+
+  /**
+   * 导入 OpenAI 账号（直接保存，不验证）
+   */
+  async importOpenAIAccount(input: ImportOpenAIAccountSchema) {
+    const { apiBaseUrl, apiKey, name, priority = 50, schedulable = true } = input;
+
+    const account = await accountsRepository.create({
+      platform: 'openai',
+      platformId: `openai-${randomUUID().substring(0, 8)}`,
+      name: name ?? `OpenAI-${apiBaseUrl.replace(/https?:\/\//, '').substring(0, 20)}`,
+      openaiApiKey: apiKey,
+      openaiBaseUrl: apiBaseUrl,
+      status: 'active',
+      priority,
+      schedulable,
+    });
+
     const result = await accountsRepository.findById(account.id);
     return this.sanitizeAccount(result!);
   }
@@ -383,6 +409,11 @@ export class AccountsService {
 
       const result = await accountsRepository.findById(id);
       return this.sanitizeAccount(result!);
+    }
+
+    if (refreshedAccount.platform === 'openai') {
+      // OpenAI 不做配额管理，直接返回账号
+      return this.sanitizeAccount(refreshedAccount);
     }
 
     throw new AppError(400, ErrorCodes.VALIDATION_ERROR, `Unsupported platform: ${account.platform}`);

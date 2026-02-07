@@ -130,6 +130,7 @@ export class ApiKeyRepository {
             claudeModel: m.claudeModel,
             platform: m.platform,
             targetModel: m.targetModel,
+            reasoningEffort: m.reasoningEffort || null,
           })),
         },
       },
@@ -160,6 +161,7 @@ export class ApiKeyRepository {
           claudeModel: m.claudeModel,
           platform: m.platform,
           targetModel: m.targetModel,
+          reasoningEffort: m.reasoningEffort || null,
         })),
       };
     }
@@ -212,6 +214,7 @@ export class ApiKeyRepository {
       claudeModel: m.claudeModel as ModelMapping['claudeModel'],
       platform: m.platform as ModelMapping['platform'],
       targetModel: m.targetModel,
+      reasoningEffort: m.reasoningEffort ?? undefined,
     }));
 
     // 存入缓存

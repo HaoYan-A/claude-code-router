@@ -10,6 +10,7 @@ import type {
   AccountListQuery,
   PlatformModelsResponse,
   ImportKiroAccountInput,
+  ImportOpenAIAccountInput,
 } from '@claude-code-router/shared';
 
 interface ApiResponse<T> {
@@ -171,6 +172,18 @@ export function useImportKiroAccount() {
   return useMutation({
     mutationFn: (data: ImportKiroAccountInput) =>
       api.post<ApiResponse<ThirdPartyAccount>>('/accounts/kiro/import', data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['accounts'] });
+    },
+  });
+}
+
+// 导入 OpenAI 账号
+export function useImportOpenAIAccount() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (data: ImportOpenAIAccountInput) =>
+      api.post<ApiResponse<ThirdPartyAccount>>('/accounts/openai/import', data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['accounts'] });
     },
