@@ -13,7 +13,14 @@ export const PLATFORM_MODELS = {
       { id: 'claude-opus-4', name: 'Claude Opus 4' },
     ],
   },
-  // 未来可扩展其他平台
+  openai: {
+    name: 'OpenAI',
+    models: [
+      { id: 'gpt-5.2-codex', name: 'GPT-5.2 Codex' },
+      { id: 'gpt-5.3-codex', name: 'GPT-5.3 Codex' },
+      { id: 'gpt-5.1-codex-mini', name: 'GPT-5.1 Codex Mini' },
+    ],
+  },
 } as const;
 
 export type PlatformType = keyof typeof PLATFORM_MODELS;

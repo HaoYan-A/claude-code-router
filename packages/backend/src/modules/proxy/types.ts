@@ -237,7 +237,7 @@ export interface ProxyContext {
 
 export interface SelectedAccount {
   id: string;
-  platform: 'antigravity' | 'kiro';
+  platform: 'antigravity' | 'kiro' | 'openai';
   accessToken: string;
   projectId: string;
   refreshToken: string;
@@ -246,4 +246,7 @@ export interface SelectedAccount {
   kiroClientId?: string;
   kiroClientSecret?: string;
   kiroRegion?: string;
+  // OpenAI 特有字段
+  openaiApiKey?: string;
+  openaiBaseUrl?: string;
 }

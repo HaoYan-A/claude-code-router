@@ -6,6 +6,7 @@ import type {
   OAuthExchangeSchema,
   AvailableAccountQuerySchema,
   ImportKiroAccountSchema,
+  ImportOpenAIAccountSchema,
 } from '@claude-code-router/shared';
 import { accountsService } from './accounts.service.js';
 
@@ -16,7 +17,7 @@ export class AccountsController {
   async getAll(req: Request, res: Response): Promise<void> {
     const query = req.query as unknown as AccountListQuerySchema;
     const result = await accountsService.getAll({
-      platform: query.platform as 'antigravity' | undefined,
+      platform: query.platform as 'antigravity' | 'kiro' | 'openai' | undefined,
       status: query.status as 'created' | 'active' | 'expired' | 'error' | undefined,
       isActive: query.isActive,
       schedulable: query.schedulable,
@@ -135,6 +136,15 @@ export class AccountsController {
   async importKiroAccount(req: Request, res: Response): Promise<void> {
     const input = req.body as ImportKiroAccountSchema;
     const account = await accountsService.importKiroAccount(input);
+    res.status(201).json({ success: true, data: account });
+  }
+
+  /**
+   * 导入 OpenAI 账号
+   */
+  async importOpenAIAccount(req: Request, res: Response): Promise<void> {
+    const input = req.body as ImportOpenAIAccountSchema;
+    const account = await accountsService.importOpenAIAccount(input);
     res.status(201).json({ success: true, data: account });
   }
 }

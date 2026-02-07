@@ -59,6 +59,24 @@
       "output": 5.50,
       "cacheRead": 0.11,
       "cacheWrite": 1.375
+    },
+    "gpt-5.2-codex": {
+      "description": "OpenAI 平台 - GPT-5.2 Codex",
+      "input": 1.75,
+      "output": 14.00,
+      "cacheRead": 0.17
+    },
+    "gpt-5.3-codex": {
+      "description": "OpenAI 平台 - GPT-5.3 Codex",
+      "input": 1.75,
+      "output": 14.00,
+      "cacheRead": 0.17
+    },
+    "gpt-5.1-codex-mini": {
+      "description": "OpenAI 平台 - GPT-5.1 Codex Mini",
+      "input": 0.25,
+      "output": 2.00,
+      "cacheRead": 0.03
     }
   }
 }

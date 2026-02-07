@@ -43,7 +43,13 @@ import {
   KIRO_GENERATE_PATH,
 } from './channels/kiro/index.js';
 import { getKiroHeaders } from '../accounts/platforms/kiro.service.js';
-import type { ClaudeRequest, ProxyContext, ModelSlot, MessageContent, SystemPrompt } from './types.js';
+// OpenAI channel
+import {
+  convertClaudeToOpenAI,
+  handleOpenAISSEStream,
+  DEFAULT_OPENAI_BASE_URL,
+} from './channels/openai/index.js';
+import type { ClaudeRequest, ClaudeResponse, ContentBlock, ProxyContext, ModelSlot, MessageContent, SystemPrompt } from './types.js';
 import type { SelectedAccount } from './types.js';
 
 // 最大重试次数
@@ -294,7 +300,14 @@ export class ProxyService {
     while (true) {
       try {
         // 根据平台类型选择不同的执行方法
-        if (currentAccount.platform === 'kiro') {
+        if (currentAccount.platform === 'openai') {
+          await this.executeOpenaiProxy(
+            claudeReq,
+            { ...context, platform: 'openai', accountId: currentAccount.id, accessToken: currentAccount.accessToken, projectId: currentAccount.projectId },
+            res,
+            currentAccount
+          );
+        } else if (currentAccount.platform === 'kiro') {
           await this.executeKiroProxy(
             claudeReq,
             { ...context, platform: 'kiro', accountId: currentAccount.id, accessToken: currentAccount.accessToken, projectId: currentAccount.projectId },
@@ -742,6 +755,191 @@ export class ProxyService {
   }
 
   /**
+   * 执行 OpenAI 平台代理请求
+   */
+  private async executeOpenaiProxy(
+    claudeReq: ClaudeRequest,
+    context: ProxyContext & { accessToken: string; projectId: string },
+    res: Response,
+    account: SelectedAccount
+  ): Promise<void> {
+    const isStream = claudeReq.stream !== false; // 默认流式
+
+    // 转换请求
+    const { body: openaiBody } = convertClaudeToOpenAI(claudeReq, {
+      targetModel: context.targetModel,
+    });
+
+    // 强制设置 stream
+    openaiBody.stream = isStream;
+
+    // 构建 URL
+    const baseUrl = account.openaiBaseUrl || DEFAULT_OPENAI_BASE_URL;
+    const url = `${baseUrl}/v1/responses`;
+
+    // 构建上游请求头
+    const upstreamHeaders: Record<string, string> = {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${account.openaiApiKey || context.accessToken}`,
+    };
+
+    const upstreamRequestHeadersStr = JSON.stringify(upstreamHeaders);
+    const upstreamRequestBodyStr = JSON.stringify(openaiBody);
+
+    // 更新日志记录
+    logRepository.update(context.logId, {
+      upstreamRequestHeaders: upstreamRequestHeadersStr,
+      upstreamRequestBody: upstreamRequestBodyStr,
+    }).catch((err) => logger.error({ err, logId: context.logId }, 'Failed to update upstream request data'));
+
+    logger.info(
+      {
+        url,
+        platform: 'openai',
+        targetModel: context.targetModel,
+        isStream,
+        messageCount: context.messageCount,
+      },
+      'Sending request to OpenAI Responses API'
+    );
+
+    // 发送请求
+    const proxyAgent = getProxyAgent();
+    const fetchOptions: RequestInit & { dispatcher?: unknown } = {
+      method: 'POST',
+      headers: upstreamHeaders,
+      body: upstreamRequestBodyStr,
+    };
+    if (proxyAgent) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      fetchOptions.dispatcher = proxyAgent as any;
+    }
+    const response = await fetch(url, fetchOptions);
+
+    // 收集上游响应头
+    const upstreamResponseHeaders: Record<string, string> = {};
+    response.headers.forEach((value, key) => {
+      upstreamResponseHeaders[key] = value;
+    });
+
+    // 处理错误响应
+    if (!response.ok) {
+      const errorBody = await response.text();
+      logger.error(
+        {
+          statusCode: response.status,
+          errorBody,
+          accountId: context.accountId,
+          url,
+          targetModel: context.targetModel,
+        },
+        'OpenAI API error'
+      );
+
+      throw new ProxyError(
+        response.status,
+        'UPSTREAM_ERROR',
+        `OpenAI API error: ${response.status} - ${errorBody.substring(0, 200)}`
+      );
+    }
+
+    // 处理响应
+    const durationMs = Date.now() - context.startTime;
+
+    if (isStream && response.body) {
+      res.setHeader('X-Request-Id', context.logId);
+
+      const result = await handleOpenAISSEStream(
+        response.body,
+        res,
+        {
+          sessionId: context.sessionId,
+          modelName: context.targetModel,
+        }
+      );
+
+      logBuffer.add({
+        id: context.logId,
+        status: 'success',
+        statusCode: 200,
+        inputTokens: result.inputTokens,
+        outputTokens: result.outputTokens,
+        durationMs,
+        targetModel: context.targetModel,
+        platform: 'openai',
+        accountId: context.accountId,
+        upstreamResponseHeaders: JSON.stringify(upstreamResponseHeaders),
+        upstreamResponseBody: result.upstreamResponseBody,
+        clientResponseHeaders: JSON.stringify({ 'Content-Type': 'text/event-stream' }),
+        responseBody: result.clientResponseBody,
+        cacheReadTokens: result.cacheReadTokens,
+        cacheCreationTokens: 0,
+        rawInputTokens: result.rawInputTokens,
+        rawOutputTokens: result.outputTokens,
+        rawCacheTokens: result.rawCacheReadTokens,
+        apiKeyId: context.apiKeyId,
+      });
+
+      accountSelector.updateUsageStats(
+        context.accountId,
+        result.inputTokens,
+        result.outputTokens,
+        result.cacheReadTokens
+      ).catch((err) => logger.error({ err, accountId: context.accountId }, 'Failed to update account stats'));
+    } else {
+      // 非流式响应 — OpenAI Responses API 返回完整 response 对象
+      const responseText = await response.text();
+      try {
+        const responseObj = JSON.parse(responseText);
+        const claudeResponse = transformOpenAINonStreamingResponse(responseObj, context.targetModel);
+
+        // 保存原始值用于日志，缩放值返回给客户端
+        const rawInputTokens = claudeResponse.usage.input_tokens;
+        const rawCacheTokens = claudeResponse.usage.cache_read_input_tokens || 0;
+        claudeResponse.usage.input_tokens = Math.round(rawInputTokens / 2);
+        if (claudeResponse.usage.cache_read_input_tokens) {
+          claudeResponse.usage.cache_read_input_tokens = Math.round(rawCacheTokens / 2);
+        }
+
+        res.setHeader('X-Request-Id', context.logId);
+        res.json(claudeResponse);
+
+        logBuffer.add({
+          id: context.logId,
+          status: 'success',
+          statusCode: 200,
+          responseBody: JSON.stringify(claudeResponse),
+          inputTokens: claudeResponse.usage.input_tokens,
+          outputTokens: claudeResponse.usage.output_tokens,
+          durationMs,
+          targetModel: context.targetModel,
+          platform: 'openai',
+          accountId: context.accountId,
+          upstreamResponseHeaders: JSON.stringify(upstreamResponseHeaders),
+          upstreamResponseBody: responseText,
+          clientResponseHeaders: JSON.stringify({ 'Content-Type': 'application/json' }),
+          cacheReadTokens: claudeResponse.usage.cache_read_input_tokens || 0,
+          cacheCreationTokens: 0,
+          rawInputTokens,
+          rawOutputTokens: claudeResponse.usage.output_tokens,
+          rawCacheTokens,
+          apiKeyId: context.apiKeyId,
+        });
+
+        accountSelector.updateUsageStats(
+          context.accountId,
+          claudeResponse.usage.input_tokens,
+          claudeResponse.usage.output_tokens,
+          claudeResponse.usage.cache_read_input_tokens || 0
+        ).catch((err) => logger.error({ err, accountId: context.accountId }, 'Failed to update account stats'));
+      } catch (parseError) {
+        logger.error({ parseError, responseText: responseText.substring(0, 500) }, 'Failed to parse OpenAI response');
+        throw new ProxyError(500, 'PARSE_ERROR', 'Failed to parse OpenAI response');
+      }
+    }
+  }
+
+  /**
    * 获取模型映射
    */
   private async getModelMapping(
@@ -788,6 +986,88 @@ export class ProxyService {
     if (!totalText) return 0;
     return Math.ceil(totalText.length / 4);
   }
+}
+
+/**
+ * 将 OpenAI Responses API 非流式响应转换为 Claude 响应格式
+ */
+function transformOpenAINonStreamingResponse(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  response: any,
+  modelName: string
+): ClaudeResponse {
+  const content: ContentBlock[] = [];
+
+  // 遍历 output items
+  if (response.output && Array.isArray(response.output)) {
+    for (const item of response.output) {
+      if (item.type === 'reasoning' && item.summary) {
+        // Reasoning summary → thinking block
+        for (const part of item.summary) {
+          if (part.type === 'summary_text' && part.text) {
+            content.push({
+              type: 'thinking',
+              thinking: part.text,
+            } as ContentBlock);
+          }
+        }
+      } else if (item.type === 'message' && item.content) {
+        // Message → text block
+        for (const part of item.content) {
+          if (part.type === 'output_text' && part.text) {
+            content.push({
+              type: 'text',
+              text: part.text,
+            } as ContentBlock);
+          }
+        }
+      } else if (item.type === 'function_call') {
+        // Function call → tool_use block
+        let input: unknown = {};
+        try {
+          input = JSON.parse(item.arguments || '{}');
+        } catch {
+          input = {};
+        }
+        content.push({
+          type: 'tool_use',
+          id: item.call_id || item.id,
+          name: item.name,
+          input,
+        } as ContentBlock);
+      }
+    }
+  }
+
+  // 推导 stop_reason
+  const hasFunctionCall = response.output?.some((item: { type: string }) => item.type === 'function_call');
+  let stopReason = 'end_turn';
+  if (hasFunctionCall) {
+    stopReason = 'tool_use';
+  } else if (response.incomplete_details) {
+    stopReason = 'max_tokens';
+  }
+
+  // 提取 usage
+  const usage = response.usage || {};
+  const inputTokens = usage.input_tokens || 0;
+  const outputTokens = usage.output_tokens || 0;
+  const cachedTokens = usage.input_tokens_details?.cached_tokens || 0;
+
+  return {
+    id: `msg_${Date.now()}`,
+    type: 'message',
+    role: 'assistant',
+    model: modelName,
+    content,
+    stop_reason: stopReason,
+    stop_sequence: null,
+    usage: {
+      input_tokens: inputTokens,
+      output_tokens: outputTokens,
+      cache_read_input_tokens: cachedTokens,
+    },
+  };
 }
 
 /**

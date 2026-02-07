@@ -1,7 +1,7 @@
 import { z } from 'zod';
 
 // 平台类型
-export const accountPlatformSchema = z.enum(['antigravity', 'kiro']);
+export const accountPlatformSchema = z.enum(['antigravity', 'kiro', 'openai']);
 
 // 账号状态
 export const accountStatusSchema = z.enum(['created', 'active', 'expired', 'error']);
@@ -56,6 +56,8 @@ export const updateAccountSchema = z.object({
   isActive: z.boolean().optional(),
   priority: z.number().int().min(1).max(100).optional(),
   schedulable: z.boolean().optional(),
+  openaiBaseUrl: z.string().url().optional(),
+  openaiApiKey: z.string().min(1).optional(),
 });
 
 // OAuth 授权 URL 响应 Schema
@@ -113,6 +115,15 @@ export const importKiroAccountSchema = z.object({
   schedulable: z.boolean().default(true),
 });
 
+// OpenAI 导入请求 Schema
+export const importOpenAIAccountSchema = z.object({
+  apiBaseUrl: z.string().url(),
+  apiKey: z.string().min(1),
+  name: z.string().min(1).max(100).optional(),
+  priority: z.number().int().min(1).max(100).default(50),
+  schedulable: z.boolean().default(true),
+});
+
 // 类型导出
 export type AccountPlatformSchema = z.infer<typeof accountPlatformSchema>;
 export type AccountStatusSchema = z.infer<typeof accountStatusSchema>;
@@ -127,3 +138,4 @@ export type AvailableAccountQuerySchema = z.infer<typeof availableAccountQuerySc
 export type PlatformModelSchema = z.infer<typeof platformModelSchema>;
 export type PlatformModelsResponseSchema = z.infer<typeof platformModelsResponseSchema>;
 export type ImportKiroAccountSchema = z.infer<typeof importKiroAccountSchema>;
+export type ImportOpenAIAccountSchema = z.infer<typeof importOpenAIAccountSchema>;

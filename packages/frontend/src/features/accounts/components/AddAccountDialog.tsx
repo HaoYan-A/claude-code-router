@@ -12,9 +12,10 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import { ExternalLink, Copy, Check, Loader2, KeyRound, Globe, FileUp } from 'lucide-react';
+import { ExternalLink, Copy, Check, Loader2, KeyRound, Globe, FileUp, Brain } from 'lucide-react';
 import { useOAuthUrl, useOAuthExchange, useCreateAccount } from '@/lib/queries/accounts';
 import { KiroImportForm } from './KiroImportForm';
+import { OpenAIImportForm } from './OpenAIImportForm';
 
 interface AddAccountDialogProps {
   open: boolean;
@@ -22,7 +23,7 @@ interface AddAccountDialogProps {
 }
 
 export function AddAccountDialog({ open, onOpenChange }: AddAccountDialogProps) {
-  const [tab, setTab] = useState<'oauth' | 'manual' | 'kiro'>('oauth');
+  const [tab, setTab] = useState<'oauth' | 'manual' | 'kiro' | 'openai'>('oauth');
 
   // OAuth state
   const [codeUrl, setCodeUrl] = useState('');
@@ -108,11 +109,11 @@ export function AddAccountDialog({ open, onOpenChange }: AddAccountDialogProps) 
           </DialogDescription>
         </DialogHeader>
 
-        <Tabs value={tab} onValueChange={(v) => setTab(v as 'oauth' | 'manual' | 'kiro')}>
-          <TabsList className="grid w-full grid-cols-3">
+        <Tabs value={tab} onValueChange={(v) => setTab(v as 'oauth' | 'manual' | 'kiro' | 'openai')}>
+          <TabsList className="grid w-full grid-cols-4">
             <TabsTrigger value="oauth" className="flex items-center gap-2">
               <Globe className="h-4 w-4" />
-              OAuth 授权
+              OAuth
             </TabsTrigger>
             <TabsTrigger value="manual" className="flex items-center gap-2">
               <KeyRound className="h-4 w-4" />
@@ -120,7 +121,11 @@ export function AddAccountDialog({ open, onOpenChange }: AddAccountDialogProps) 
             </TabsTrigger>
             <TabsTrigger value="kiro" className="flex items-center gap-2">
               <FileUp className="h-4 w-4" />
-              Kiro 导入
+              Kiro
+            </TabsTrigger>
+            <TabsTrigger value="openai" className="flex items-center gap-2">
+              <Brain className="h-4 w-4" />
+              OpenAI
             </TabsTrigger>
           </TabsList>
 
@@ -313,6 +318,10 @@ export function AddAccountDialog({ open, onOpenChange }: AddAccountDialogProps) 
 
           <TabsContent value="kiro" className="mt-4">
             <KiroImportForm onSuccess={handleClose} onCancel={handleClose} />
+          </TabsContent>
+
+          <TabsContent value="openai" className="mt-4">
+            <OpenAIImportForm onSuccess={handleClose} onCancel={handleClose} />
           </TabsContent>
         </Tabs>
       </DialogContent>

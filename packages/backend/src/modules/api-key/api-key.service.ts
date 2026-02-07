@@ -13,12 +13,13 @@ import { apiKeyUsageRepository } from './api-key-usage.repository.js';
 import { AppError } from '../../middlewares/error.middleware.js';
 
 function transformMappings(
-  mappings: { claudeModel: string; platform: string; targetModel: string }[]
+  mappings: { claudeModel: string; platform: string; targetModel: string; reasoningEffort?: string | null }[]
 ): ModelMapping[] {
   return mappings.map((m) => ({
     claudeModel: m.claudeModel as ModelMapping['claudeModel'],
     platform: m.platform as ModelMapping['platform'],
     targetModel: m.targetModel,
+    reasoningEffort: m.reasoningEffort ?? undefined,
   }));
 }
 

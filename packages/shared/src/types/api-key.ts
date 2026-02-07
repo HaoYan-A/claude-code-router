@@ -4,6 +4,7 @@ export interface ModelMapping {
   claudeModel: ClaudeModelSlot;
   platform: PlatformId;
   targetModel: string;
+  reasoningEffort?: string;
 }
 
 export interface ApiKey {
