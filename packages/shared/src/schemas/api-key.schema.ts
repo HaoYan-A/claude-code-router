@@ -6,7 +6,7 @@ export const modelMappingSchema = z.object({
   claudeModel: z.enum(CLAUDE_MODEL_SLOTS),
   platform: z.enum(['antigravity', 'kiro', 'openai']),
   targetModel: z.string().min(1),
-  reasoningEffort: z.enum(['none', 'low', 'medium', 'high', 'auto']).optional(),
+  reasoningEffort: z.enum(['none', 'low', 'medium', 'high', 'max', 'auto']).optional(),
 });
 
 // 验证三个映射都存在

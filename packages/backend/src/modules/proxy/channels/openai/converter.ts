@@ -10,7 +10,9 @@ import type {
   ContentBlock,
   SystemPrompt,
   Tool,
+  EffortLevel,
 } from '../../types.js';
+import { resolveEffort } from '../../types.js';
 import type {
   OpenAIResponsesRequest,
   OpenAIInputItem,
@@ -72,7 +74,7 @@ export function convertClaudeToOpenAI(
   }
 
   // Thinking → Reasoning
-  const reasoning = convertThinking(claudeReq.thinking);
+  const reasoning = convertThinking(claudeReq);
   if (reasoning) {
     body.reasoning = reasoning;
   }
@@ -286,29 +288,41 @@ function convertToolChoice(claudeReq: ClaudeRequest): OpenAIToolChoice | undefin
 }
 
 /**
- * 转换 thinking → reasoning
+ * 将 effort 等级映射到 OpenAI reasoning effort
  */
-function convertThinking(thinking?: { type: string; budget_tokens?: number }): OpenAIReasoning | undefined {
-  if (!thinking || thinking.type !== 'enabled') return undefined;
-
-  const budget = thinking.budget_tokens;
-
-  // budget_tokens <= 0: 不启用 reasoning
-  if (budget !== undefined && budget <= 0) return undefined;
-
-  let effort: 'low' | 'medium' | 'high' = 'high';
-  if (budget !== undefined) {
-    if (budget <= 1024) {
-      effort = 'low';
-    } else if (budget <= 8192) {
-      effort = 'medium';
-    } else {
-      effort = 'high';
-    }
+function mapEffortToOpenAI(effort: EffortLevel): OpenAIReasoning['effort'] {
+  switch (effort) {
+    case 'low': return 'low';
+    case 'medium': return 'medium';
+    case 'high': return 'high';
+    case 'max': return 'xhigh';
+    default: return 'high';
   }
+}
+
+/**
+ * 转换 thinking → reasoning
+ * 支持新格式 (adaptive + output_config.effort) 和旧格式 (enabled + budget_tokens)
+ */
+function convertThinking(claudeReq: ClaudeRequest): OpenAIReasoning | undefined {
+  const thinking = claudeReq.thinking;
+  const hasEffort = !!claudeReq.output_config?.effort;
+
+  // 判断是否启用 thinking
+  const thinkingEnabled =
+    thinking?.type === 'enabled' ||
+    thinking?.type === 'adaptive' ||
+    hasEffort;
+
+  if (!thinkingEnabled) return undefined;
+
+  // 显式禁用
+  if (thinking?.type === 'disabled') return undefined;
+
+  const effort = resolveEffort(claudeReq);
 
   return {
-    effort,
+    effort: mapEffortToOpenAI(effort),
     summary: 'auto',
   };
 }

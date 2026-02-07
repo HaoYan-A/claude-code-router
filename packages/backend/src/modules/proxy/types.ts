@@ -16,11 +16,18 @@ export interface ClaudeRequest {
   top_p?: number;
   top_k?: number;
   thinking?: ThinkingConfig;
+  output_config?: OutputConfig;
   metadata?: Metadata;
 }
 
+export type EffortLevel = 'low' | 'medium' | 'high' | 'max';
+
+export interface OutputConfig {
+  effort?: EffortLevel;
+}
+
 export interface ThinkingConfig {
-  type: 'enabled' | 'disabled';
+  type: 'enabled' | 'disabled' | 'adaptive';
   budget_tokens?: number;
 }
 
@@ -249,4 +256,41 @@ export interface SelectedAccount {
   // OpenAI 特有字段
   openaiApiKey?: string;
   openaiBaseUrl?: string;
+}
+
+// ==================== Effort 工具函数 ====================
+
+/**
+ * 解析请求中的 effort 等级
+ * 优先级: output_config.effort > budget_tokens 映射 > 默认 'high'
+ */
+export function resolveEffort(req: ClaudeRequest): EffortLevel {
+  // 1. 优先使用 output_config.effort
+  if (req.output_config?.effort) {
+    return req.output_config.effort;
+  }
+
+  // 2. 从 budget_tokens 映射
+  const budget = req.thinking?.budget_tokens;
+  if (budget !== undefined) {
+    if (budget <= 1024) return 'low';
+    if (budget <= 5000) return 'medium';
+    if (budget <= 10000) return 'high';
+    return 'max';
+  }
+
+  // 3. 默认 'high'
+  return 'high';
+}
+
+/**
+ * effort 转 budget_tokens 数值（给需要数值的平台用）
+ */
+export function effortToBudgetTokens(effort: EffortLevel): number {
+  switch (effort) {
+    case 'low': return 1024;
+    case 'medium': return 5000;
+    case 'high': return 10000;
+    case 'max': return 100000;
+  }
 }

@@ -49,7 +49,7 @@ import {
   handleOpenAISSEStream,
   DEFAULT_OPENAI_BASE_URL,
 } from './channels/openai/index.js';
-import type { ClaudeRequest, ClaudeResponse, ContentBlock, ProxyContext, ModelSlot, MessageContent, SystemPrompt } from './types.js';
+import type { ClaudeRequest, ClaudeResponse, ContentBlock, ProxyContext, ModelSlot, MessageContent, SystemPrompt, EffortLevel } from './types.js';
 import type { SelectedAccount } from './types.js';
 
 // 最大重试次数
@@ -195,6 +195,9 @@ export class ProxyService {
       }
       // 保存 targetModel 以便在错误处理时使用
       resolvedTargetModel = mapping.targetModel;
+
+      // 2.5 应用 API Key 映射的 reasoningEffort 覆盖
+      this.applyReasoningEffortOverride(claudeReq, mapping.reasoningEffort);
 
       // 3. 选择账号
       const account = await accountSelector.selectAccount(mapping.targetModel);
@@ -945,7 +948,7 @@ export class ProxyService {
   private async getModelMapping(
     apiKeyId: string,
     modelSlot: ModelSlot
-  ): Promise<{ platform: string; targetModel: string } | null> {
+  ): Promise<{ platform: string; targetModel: string; reasoningEffort?: string } | null> {
     const mappings = await apiKeyRepository.getModelMappings(apiKeyId);
     const mapping = mappings.find((m) => m.claudeModel === modelSlot);
 
@@ -956,7 +959,38 @@ export class ProxyService {
     return {
       platform: mapping.platform,
       targetModel: mapping.targetModel,
+      reasoningEffort: mapping.reasoningEffort,
     };
+  }
+
+  /**
+   * 应用 API Key 映射的 reasoningEffort 覆盖
+   * - auto / undefined: 不覆盖，走请求中的配置
+   * - none: 等同于 high（默认值）
+   * - low / medium / high / max: 强制覆盖
+   */
+  private applyReasoningEffortOverride(claudeReq: ClaudeRequest, reasoningEffort?: string): void {
+    if (!reasoningEffort || reasoningEffort === 'auto') {
+      return;
+    }
+
+    const effortMap: Record<string, EffortLevel> = {
+      none: 'high',
+      low: 'low',
+      medium: 'medium',
+      high: 'high',
+      max: 'max',
+    };
+
+    const effort = effortMap[reasoningEffort];
+    if (!effort) return;
+
+    logger.info(
+      { reasoningEffort, resolvedEffort: effort },
+      'Applying API Key reasoningEffort override'
+    );
+
+    claudeReq.output_config = { effort };
   }
 
   /**

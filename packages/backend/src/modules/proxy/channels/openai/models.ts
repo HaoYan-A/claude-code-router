@@ -59,7 +59,7 @@ export type OpenAIToolChoice =
   | { type: 'function'; name: string };
 
 export interface OpenAIReasoning {
-  effort: 'low' | 'medium' | 'high';
+  effort: 'none' | 'minimal' | 'low' | 'medium' | 'high' | 'xhigh';
   summary?: 'auto' | 'concise' | 'detailed';
 }
 
