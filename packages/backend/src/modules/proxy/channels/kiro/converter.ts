@@ -20,6 +20,7 @@ import type {
   Tool,
   SystemPrompt,
 } from '../../types.js';
+import { resolveEffort, effortToBudgetTokens } from '../../types.js';
 import type {
   KiroRequest,
   KiroHistoryMessage,
@@ -62,10 +63,11 @@ export function convertClaudeToKiro(
   const { conversationId = uuidv4(), targetModel } = options;
 
   // 从请求中读取 thinking 配置
-  // 如果 thinking.type === 'enabled' 或未设置，则启用 thinking
+  // 如果 thinking.type !== 'disabled'（包括 'enabled'、'adaptive' 或未设置），则启用 thinking
   const thinkingConfig = claudeReq.thinking;
   const enableThinking = !thinkingConfig || thinkingConfig.type !== 'disabled';
-  const thinkingBudgetTokens = thinkingConfig?.budget_tokens;
+  const effort = resolveEffort(claudeReq);
+  const thinkingBudgetTokens = effortToBudgetTokens(effort);
 
   // 1. 映射模型 ID（优先使用映射配置中的 targetModel）
   const kiroModelId = targetModel || mapModelId(claudeReq.model);
@@ -122,7 +124,8 @@ export function convertClaudeToKiro(
       toolsCount: kiroTools.length,
       hasToolResults: toolResults.length > 0,
       enableThinking,
-      thinkingBudgetTokens: thinkingBudgetTokens || 10000,
+      effort,
+      thinkingBudgetTokens,
     },
     'Converted Claude request to Kiro format'
   );

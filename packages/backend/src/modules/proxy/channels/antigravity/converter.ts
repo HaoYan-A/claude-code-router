@@ -19,6 +19,7 @@ import type {
   SystemPrompt,
   ModelSlot,
 } from '../../types.js';
+import { resolveEffort, effortToBudgetTokens } from '../../types.js';
 import type {
   GeminiRequest,
   GeminiInnerRequest,
@@ -253,7 +254,7 @@ function deepCleanCacheControl(obj: unknown): void {
  */
 function detectThinkingEnabled(req: ClaudeRequest, targetModel: string): boolean {
   // 请求中显式配置
-  if (req.thinking?.type === 'enabled') {
+  if (req.thinking?.type === 'enabled' || req.thinking?.type === 'adaptive') {
     // 检查目标模型是否支持 thinking
     if (!targetModelSupportsThinking(targetModel)) {
       logger.warn(
@@ -266,6 +267,17 @@ function detectThinkingEnabled(req: ClaudeRequest, targetModel: string): boolean
 
   if (req.thinking?.type === 'disabled') {
     return false;
+  }
+
+  // 仅有 output_config.effort 也算启用
+  if (req.output_config?.effort) {
+    if (!targetModelSupportsThinking(targetModel)) {
+      logger.warn(
+        `[Thinking-Mode] Target model '${targetModel}' does not support thinking, disabling`
+      );
+      return false;
+    }
+    return true;
   }
 
   // 默认：Opus 模型启用 thinking
@@ -783,15 +795,19 @@ function buildGenerationConfig(
 
   // Thinking 配置
   if (isThinkingEnabled) {
+    const effort = resolveEffort(req);
+
     // Gemini 3 系列使用 thinkingLevel，其他使用 thinkingBudget
     if (isGemini3Model(targetModel)) {
+      // Gemini 3 thinkingLevel 只支持 'low' | 'medium' | 'high'，max 映射为 'high'
+      const thinkingLevel = effort === 'max' ? 'high' : effort;
       config.thinkingConfig = {
         includeThoughts: true,
-        thinkingLevel: 'high',
+        thinkingLevel,
       };
     } else {
       config.thinkingConfig = {
-        thinkingBudget: req.thinking?.budget_tokens || 10000,
+        thinkingBudget: effortToBudgetTokens(effort),
       };
     }
   }

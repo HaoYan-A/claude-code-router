@@ -1,4 +1,4 @@
-export const REASONING_EFFORTS = ['none', 'low', 'medium', 'high', 'auto'] as const;
+export const REASONING_EFFORTS = ['none', 'low', 'medium', 'high', 'max', 'auto'] as const;
 export type ReasoningEffort = (typeof REASONING_EFFORTS)[number];
 
 export const PLATFORMS = {
