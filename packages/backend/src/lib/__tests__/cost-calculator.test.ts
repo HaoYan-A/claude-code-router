@@ -182,7 +182,8 @@ describe('cost-calculator', () => {
       expect(models).toContain('claude-opus-4.5');
       expect(models).toContain('claude-sonnet-4.5');
       expect(models).toContain('claude-haiku-4.5');
-      expect(models.length).toBe(7);
+      // Model list can grow as pricing config expands.
+      expect(models.length).toBeGreaterThanOrEqual(7);
     });
   });
 

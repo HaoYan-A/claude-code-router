@@ -8,6 +8,7 @@ import {
   idParamSchema,
   importKiroAccountSchema,
   importOpenAIAccountSchema,
+  codexOauthExchangeSchema,
 } from '@claude-code-router/shared';
 import { accountsController } from './accounts.controller.js';
 import { validate } from '../../middlewares/validate.middleware.js';
@@ -54,6 +55,18 @@ router.post(
   '/openai/import',
   validate(importOpenAIAccountSchema),
   asyncHandler((req, res) => accountsController.importOpenAIAccount(req, res))
+);
+
+// Codex OAuth
+router.get(
+  '/codex/oauth-url',
+  asyncHandler((req, res) => accountsController.getCodexOAuthUrl(req, res))
+);
+
+router.post(
+  '/codex/exchange',
+  validate(codexOauthExchangeSchema),
+  asyncHandler((req, res) => accountsController.exchangeCodexOAuthCode(req, res))
 );
 
 // 批量刷新所有账号额度

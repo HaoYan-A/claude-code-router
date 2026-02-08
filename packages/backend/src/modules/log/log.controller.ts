@@ -33,6 +33,12 @@ export class LogController {
     const leaderboard = await logService.getLeaderboard(timeRange, currentUserId);
     res.json({ success: true, data: leaderboard });
   }
+
+  async getModelLeaderboard(req: Request, res: Response): Promise<void> {
+    const { timeRange } = leaderboardQuerySchema.parse(req.query);
+    const leaderboard = await logService.getModelLeaderboard(timeRange);
+    res.json({ success: true, data: leaderboard });
+  }
 }
 
 export const logController = new LogController();

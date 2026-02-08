@@ -187,27 +187,32 @@ export class LogRepository {
     };
   }
 
+  private getLeaderboardStartDate(timeRange: LeaderboardTimeRange): Date {
+    const now = new Date();
+
+    if (timeRange === 'day') {
+      // 本日：今天0点开始
+      return new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    }
+
+    if (timeRange === 'week') {
+      // 本周：周一0点开始
+      const dayOfWeek = now.getDay();
+      const diff = dayOfWeek === 0 ? 6 : dayOfWeek - 1; // 周日为0，需要特殊处理
+      return new Date(now.getFullYear(), now.getMonth(), now.getDate() - diff);
+    }
+
+    // 本月：本月1号0点开始
+    return new Date(now.getFullYear(), now.getMonth(), 1);
+  }
+
   /**
    * 获取用户消费排行榜数据
    * @param timeRange 时间范围：day=本日, week=本周, month=本月
    * @returns 按费用降序排列的前5名用户
    */
   async getLeaderboard(timeRange: LeaderboardTimeRange) {
-    const now = new Date();
-    let startDate: Date;
-
-    if (timeRange === 'day') {
-      // 本日：今天0点开始
-      startDate = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-    } else if (timeRange === 'week') {
-      // 本周：周一0点开始
-      const dayOfWeek = now.getDay();
-      const diff = dayOfWeek === 0 ? 6 : dayOfWeek - 1; // 周日为0，需要特殊处理
-      startDate = new Date(now.getFullYear(), now.getMonth(), now.getDate() - diff);
-    } else {
-      // 本月：本月1号0点开始
-      startDate = new Date(now.getFullYear(), now.getMonth(), 1);
-    }
+    const startDate = this.getLeaderboardStartDate(timeRange);
 
     // 使用 groupBy 按 userId 聚合
     const aggregatedData = await prisma.requestLog.groupBy({
@@ -253,6 +258,28 @@ export class LogRepository {
         totalCost: item._sum.cost?.toNumber() ?? 0,
         requestCount: item._count.id,
       };
+    });
+  }
+
+  async getModelLeaderboard(timeRange: LeaderboardTimeRange) {
+    const startDate = this.getLeaderboardStartDate(timeRange);
+
+    return prisma.requestLog.groupBy({
+      by: ['platform', 'targetModel', 'model'],
+      where: {
+        createdAt: { gte: startDate },
+        status: 'success',
+        platform: { not: null },
+        OR: [{ targetModel: { not: null } }, { model: { not: null } }],
+      },
+      _sum: {
+        cost: true,
+      },
+      _count: {
+        id: true,
+      },
+      orderBy: [{ _count: { id: 'desc' } }, { _sum: { cost: 'desc' } }],
+      take: 100,
     });
   }
 }

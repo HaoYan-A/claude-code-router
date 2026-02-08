@@ -1,6 +1,7 @@
 import type { ThirdPartyAccount, AccountQuota, Prisma, AccountPlatform, AccountStatus } from '@prisma/client';
 import { prisma } from '../../lib/prisma.js';
 import { redis, cacheKeys } from '../../lib/redis.js';
+import { getQuotaModelNames } from '../../config/platforms.js';
 
 const ACCOUNT_CACHE_TTL = 300; // 5 minutes
 const QUOTA_CACHE_TTL = 60; // 1 minute
@@ -68,8 +69,10 @@ export class AccountsRepository {
   }
 
   async findAvailableForModel(modelName: string): Promise<AccountWithQuotas[]> {
-    // 查找符合条件的账号：激活、状态正常、可调度、且该模型额度 > 0
+    // 查找符合条件的账号：激活、状态正常、可调度、且配额 > 0
+    // OpenAI 平台使用共享配额名（codex/openai），需匹配多个名称
     // 按 ID 排序，保证轮询顺序稳定
+    const quotaNames = getQuotaModelNames(modelName);
     return prisma.thirdPartyAccount.findMany({
       where: {
         isActive: true,
@@ -77,7 +80,7 @@ export class AccountsRepository {
         schedulable: true,
         quotas: {
           some: {
-            modelName,
+            modelName: { in: quotaNames },
             percentage: { gt: 0 },
           },
         },

@@ -256,6 +256,8 @@ export interface SelectedAccount {
   // OpenAI 特有字段
   openaiApiKey?: string;
   openaiBaseUrl?: string;
+  openaiAccountType?: string; // 'responses' | 'codex'
+  chatgptAccountId?: string;  // Codex 特有：chatgpt user_id
 }
 
 // ==================== Effort 工具函数 ====================

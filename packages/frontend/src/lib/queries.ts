@@ -18,6 +18,7 @@ import type {
   QuotaSummaryResponse,
   LeaderboardTimeRange,
   LeaderboardResponse,
+  ModelLeaderboardResponse,
 } from '@claude-code-router/shared';
 
 interface ApiResponse<T> {
@@ -247,5 +248,14 @@ export function useLeaderboard(timeRange: LeaderboardTimeRange = 'day') {
     queryKey: ['leaderboard', timeRange],
     queryFn: () => api.get<ApiResponse<LeaderboardResponse>>(`/logs/leaderboard?timeRange=${timeRange}`),
     staleTime: 60 * 1000, // 1分钟内不重新请求
+  });
+}
+
+export function useModelLeaderboard(timeRange: LeaderboardTimeRange = 'day') {
+  return useQuery({
+    queryKey: ['model-leaderboard', timeRange],
+    queryFn: () =>
+      api.get<ApiResponse<ModelLeaderboardResponse>>(`/logs/model-leaderboard?timeRange=${timeRange}`),
+    staleTime: 60 * 1000,
   });
 }

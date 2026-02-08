@@ -14,10 +14,17 @@ import { accountsRepository } from '../accounts/accounts.repository.js';
 import { accountsService } from '../accounts/accounts.service.js';
 import { antigravityService } from '../accounts/platforms/antigravity.service.js';
 import { kiroService } from '../accounts/platforms/kiro.service.js';
-import type { SelectedAccount } from './types.js';
+import { codexService } from '../accounts/platforms/codex.service.js';
+import type { ClaudeRequest, SelectedAccount } from './types.js';
 import { logger } from '../../lib/logger.js';
 import { AccountRoundRobin } from './account-round-robin.js';
 import { redis, cacheKeys } from '../../lib/redis.js';
+import {
+  generateSessionHash,
+  getSessionAccount,
+  setSessionAccount,
+  deleteSessionMapping,
+} from './codex-session.js';
 
 // Token 提前刷新时间 (60 秒)
 const TOKEN_REFRESH_BUFFER_MS = 60 * 1000;
@@ -98,6 +105,9 @@ export class AccountSelector {
   private async prepareAccount(account: AccountWithQuotas): Promise<SelectedAccount | null> {
     // 根据平台类型分发处理
     if (account.platform === 'openai') {
+      if (account.openaiAccountType === 'codex') {
+        return this.prepareCodexAccount(account);
+      }
       return this.prepareOpenaiAccount(account);
     }
 
@@ -267,6 +277,125 @@ export class AccountSelector {
       openaiApiKey: account.openaiApiKey,
       openaiBaseUrl: account.openaiBaseUrl || undefined,
     };
+  }
+
+  /**
+   * 准备 Codex 账号（OAuth token 认证，需要刷新）
+   */
+  private async prepareCodexAccount(account: AccountWithQuotas): Promise<SelectedAccount | null> {
+    if (!account.refreshToken) {
+      logger.warn({ accountId: account.id }, 'Codex account missing refresh token');
+      return null;
+    }
+
+    let accessToken = account.accessToken;
+    let tokenExpiresAt = account.tokenExpiresAt;
+
+    // 检查是否需要刷新 token
+    const needsRefresh =
+      !accessToken ||
+      !tokenExpiresAt ||
+      tokenExpiresAt.getTime() - Date.now() < TOKEN_REFRESH_BUFFER_MS;
+
+    if (needsRefresh) {
+      logger.info({ accountId: account.id, platform: 'openai/codex' }, 'Refreshing Codex access token');
+
+      try {
+        const tokenData = await codexService.refreshAccessToken(account.refreshToken);
+
+        accessToken = tokenData.access_token;
+        tokenExpiresAt = new Date(Date.now() + tokenData.expires_in * 1000);
+
+        const updateData: Record<string, unknown> = {
+          accessToken: tokenData.access_token,
+          refreshToken: tokenData.refresh_token || account.refreshToken,
+          tokenExpiresAt,
+          status: 'active',
+          errorMessage: null,
+        };
+
+        await accountsRepository.update(account.id, updateData);
+
+        logger.info(
+          { accountId: account.id, expiresAt: tokenExpiresAt },
+          'Codex access token refreshed'
+        );
+      } catch (error) {
+        await this.markAccountError(account.id, error);
+        return null;
+      }
+    }
+
+    // 从 subscriptionRaw 提取 chatgptAccountId
+    const subscriptionRaw = account.subscriptionRaw as {
+      chatgptAccountId?: string;
+      email?: string;
+    } | null;
+
+    return {
+      id: account.id,
+      platform: 'openai',
+      accessToken: accessToken!,
+      projectId: '',
+      refreshToken: account.refreshToken,
+      tokenExpiresAt,
+      openaiAccountType: 'codex',
+      chatgptAccountId: subscriptionRaw?.chatgptAccountId,
+    };
+  }
+
+  /**
+   * 带 session 粘性的账号选择（Codex 专用）
+   *
+   * 尝试让同一 session 的请求路由到同一 Codex 账号。
+   * 如果没有 session hash 或粘性账号不可用，fallback 到常规选择。
+   */
+  async selectAccountWithSession(
+    targetModel: string,
+    claudeReq: ClaudeRequest
+  ): Promise<SelectedAccount | null> {
+    const sessionHash = generateSessionHash(claudeReq);
+
+    if (sessionHash) {
+      const stickyAccountId = await getSessionAccount(sessionHash);
+
+      if (stickyAccountId) {
+        // 验证该账号是否仍然可用
+        const accounts = await accountsRepository.findAvailableForModel(targetModel);
+        const stickyAccount = accounts.find(a => a.id === stickyAccountId);
+
+        if (stickyAccount) {
+          try {
+            const selected = await this.prepareAccount(stickyAccount);
+            if (selected) {
+              logger.debug(
+                { accountId: stickyAccountId, sessionHash },
+                'Using sticky session account'
+              );
+              return selected;
+            }
+          } catch (error) {
+            logger.warn(
+              { accountId: stickyAccountId, error },
+              'Sticky session account preparation failed'
+            );
+          }
+        }
+
+        // 粘性账号不可用，删除映射
+        await deleteSessionMapping(sessionHash);
+      }
+    }
+
+    // Fallback 到常规选择
+    const account = await this.selectAccountWithOptions(targetModel);
+
+    // 如果选到 codex 账号且有 sessionHash，写入映射
+    if (account && account.openaiAccountType === 'codex' && sessionHash) {
+      await setSessionAccount(sessionHash, account.id);
+    }
+
+    return account;
   }
 
   /**

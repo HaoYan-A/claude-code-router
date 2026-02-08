@@ -1,4 +1,12 @@
-import type { LogFilterSchema, StatsTimeRange, LeaderboardTimeRange, LeaderboardItem, LeaderboardResponse } from '@claude-code-router/shared';
+import type {
+  LogFilterSchema,
+  StatsTimeRange,
+  LeaderboardTimeRange,
+  LeaderboardItem,
+  LeaderboardResponse,
+  ModelLeaderboardItem,
+  ModelLeaderboardResponse,
+} from '@claude-code-router/shared';
 import { ErrorCodes } from '@claude-code-router/shared';
 import { logRepository } from './log.repository.js';
 import { AppError } from '../../middlewares/error.middleware.js';
@@ -68,6 +76,60 @@ export class LogService {
         isCurrentUser,
       };
     });
+
+    return {
+      timeRange,
+      items,
+    };
+  }
+
+  async getModelLeaderboard(timeRange: LeaderboardTimeRange): Promise<ModelLeaderboardResponse> {
+    const rawItems = await logRepository.getModelLeaderboard(timeRange);
+
+    // groupBy by ['platform','targetModel','model'] may produce multiple rows that map to the same
+    // (platform + modelName) after choosing modelName = targetModel ?? model.
+    const merged = new Map<string, { platform: string; model: string; requestCount: number; totalCost: number }>();
+
+    for (const item of rawItems) {
+      const platform = item.platform ?? '';
+      const modelName = item.targetModel ?? item.model ?? '';
+
+      // Drop invalid rows (platform/model empty) per requirements.
+      if (!platform || !modelName) continue;
+
+      const key = `${platform}|${modelName}`;
+      const prev = merged.get(key);
+
+      const requestCount = item._count.id;
+      const totalCost = item._sum.cost?.toNumber() ?? 0;
+
+      if (!prev) {
+        merged.set(key, { platform, model: modelName, requestCount, totalCost });
+      } else {
+        prev.requestCount += requestCount;
+        prev.totalCost += totalCost;
+      }
+    }
+
+    const sorted: Omit<ModelLeaderboardItem, 'rank'>[] = Array.from(merged.values())
+      .sort((a, b) => {
+        if (b.requestCount !== a.requestCount) return b.requestCount - a.requestCount;
+        if (b.totalCost !== a.totalCost) return b.totalCost - a.totalCost;
+        if (a.platform !== b.platform) return a.platform.localeCompare(b.platform);
+        return a.model.localeCompare(b.model);
+      })
+      .slice(0, 5)
+      .map((item) => ({
+        platform: item.platform,
+        model: item.model,
+        requestCount: item.requestCount,
+        totalCost: item.totalCost,
+      }));
+
+    const items: ModelLeaderboardItem[] = sorted.map((item, index) => ({
+      rank: index + 1,
+      ...item,
+    }));
 
     return {
       timeRange,

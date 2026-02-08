@@ -5,11 +5,13 @@ import type {
   OAuthExchangeSchema,
   ImportKiroAccountSchema,
   ImportOpenAIAccountSchema,
+  CodexOAuthExchangeSchema,
 } from '@claude-code-router/shared';
 import { ErrorCodes } from '@claude-code-router/shared';
 import { accountsRepository, type AccountListParams, type AccountWithQuotas } from './accounts.repository.js';
 import { antigravityService } from './platforms/antigravity.service.js';
 import { kiroService } from './platforms/kiro.service.js';
+import { codexService } from './platforms/codex.service.js';
 import { AppError } from '../../middlewares/error.middleware.js';
 import { getAllPlatformModels } from '../../config/platforms.js';
 import { randomUUID } from 'crypto';
@@ -207,7 +209,10 @@ export class AccountsService {
     }
 
     if (account.platform === 'openai') {
-      throw new AppError(400, ErrorCodes.VALIDATION_ERROR, 'OpenAI accounts do not support token refresh');
+      if (account.openaiAccountType === 'codex') {
+        return this.refreshCodexToken(id, account);
+      }
+      throw new AppError(400, ErrorCodes.VALIDATION_ERROR, 'OpenAI API Key accounts do not support token refresh');
     }
 
     throw new AppError(400, ErrorCodes.VALIDATION_ERROR, `Unsupported platform: ${account.platform}`);
@@ -238,6 +243,31 @@ export class AccountsService {
       });
 
       return { success: true, message: 'Kiro token refreshed successfully' };
+    } catch (error) {
+      await accountsRepository.update(id, {
+        status: 'expired',
+        errorMessage: error instanceof Error ? error.message : 'Token refresh failed',
+      });
+      throw error;
+    }
+  }
+
+  /**
+   * 刷新 Codex 账号的 Token
+   */
+  private async refreshCodexToken(id: string, account: AccountWithQuotas) {
+    try {
+      const tokenResponse = await codexService.refreshAccessToken(account.refreshToken!);
+
+      await accountsRepository.update(id, {
+        accessToken: tokenResponse.access_token,
+        refreshToken: tokenResponse.refresh_token,
+        tokenExpiresAt: new Date(Date.now() + tokenResponse.expires_in * 1000),
+        status: 'active',
+        errorMessage: null,
+      });
+
+      return { success: true, message: 'Codex token refreshed successfully' };
     } catch (error) {
       await accountsRepository.update(id, {
         status: 'expired',
@@ -300,11 +330,78 @@ export class AccountsService {
       name: name ?? `OpenAI-${apiBaseUrl.replace(/https?:\/\//, '').substring(0, 20)}`,
       openaiApiKey: apiKey,
       openaiBaseUrl: apiBaseUrl,
+      openaiAccountType: 'responses',
       status: 'active',
       priority,
       schedulable,
     });
 
+    // 设置共享配额（responses 类型使用 'openai' 作为配额名，始终 100%）
+    await accountsRepository.upsertQuota(account.id, 'openai', 100, null);
+
+    const result = await accountsRepository.findById(account.id);
+    return this.sanitizeAccount(result!);
+  }
+
+  /**
+   * 获取 Codex OAuth 授权 URL
+   */
+  getCodexOAuthUrl(): { url: string; state: string } {
+    return codexService.getOAuthUrl();
+  }
+
+  /**
+   * 使用 Codex OAuth code URL 交换 token 并创建账号
+   */
+  async exchangeCodexOAuthCode(input: CodexOAuthExchangeSchema) {
+    const { codeUrl, name, priority = 50, schedulable = true } = input;
+
+    // 1. 从 URL 提取 code 和 state
+    const { code, state } = codexService.extractCodeFromUrl(codeUrl);
+
+    // 2. 交换 tokens
+    const tokenResponse = await codexService.exchangeCodeForTokens(code, state);
+
+    // 3. 解析 id_token 获取用户信息
+    let chatgptAccountId: string | undefined;
+    let email: string | undefined;
+    if (tokenResponse.id_token) {
+      const idPayload = codexService.parseIdToken(tokenResponse.id_token);
+      chatgptAccountId = idPayload.chatgptAccountId;
+      email = idPayload.email;
+    }
+
+    const platformId = chatgptAccountId || `codex-${randomUUID().substring(0, 8)}`;
+
+    // 4. 检查是否已存在
+    const existing = await accountsRepository.findByPlatformId('openai', platformId);
+    if (existing) {
+      throw new AppError(409, ErrorCodes.ACCOUNT_ALREADY_EXISTS, 'Codex account already exists');
+    }
+
+    // 5. 创建账号
+    const account = await accountsRepository.create({
+      platform: 'openai',
+      platformId,
+      name: name ?? (email ? `Codex-${email}` : `Codex-${platformId.substring(0, 12)}`),
+      accessToken: tokenResponse.access_token,
+      refreshToken: tokenResponse.refresh_token,
+      tokenExpiresAt: new Date(Date.now() + tokenResponse.expires_in * 1000),
+      openaiAccountType: 'codex',
+      subscriptionRaw: {
+        chatgptAccountId: chatgptAccountId || null,
+        email: email || null,
+      } as Prisma.InputJsonValue,
+      status: 'active',
+      priority,
+      schedulable,
+    });
+
+    // 6. 设置共享配额（codex 类型分 5h 窗口和周限两个配额）
+    await accountsRepository.upsertQuota(account.id, 'codex-5h', 100, null);
+    await accountsRepository.upsertQuota(account.id, 'codex-weekly', 100, null);
+
+    // 7. 返回创建的账号
     const result = await accountsRepository.findById(account.id);
     return this.sanitizeAccount(result!);
   }
@@ -412,7 +509,7 @@ export class AccountsService {
     }
 
     if (refreshedAccount.platform === 'openai') {
-      // OpenAI 不做配额管理，直接返回账号
+      // Codex 配额通过响应头被动更新，不主动查询；直接返回
       return this.sanitizeAccount(refreshedAccount);
     }
 

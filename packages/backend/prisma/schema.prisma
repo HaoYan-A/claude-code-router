@@ -217,8 +217,9 @@ model ThirdPartyAccount {
   kiroRegion       String? @map("kiro_region") // 如 "us-east-1"
 
   // OpenAI 特有字段（仅 OpenAI 平台使用）
-  openaiApiKey  String? @map("openai_api_key")
-  openaiBaseUrl String? @map("openai_base_url")
+  openaiApiKey       String? @map("openai_api_key")
+  openaiBaseUrl      String? @map("openai_base_url")
+  openaiAccountType  String? @map("openai_account_type") // "responses" | "codex"
 
   // 使用统计（后续通过 log 同步）
   totalRequests     Int       @default(0) @map("total_requests")

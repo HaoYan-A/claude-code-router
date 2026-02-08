@@ -18,6 +18,7 @@ import { logger } from '../../lib/logger.js';
 import { logRepository } from '../log/log.repository.js';
 import { logBuffer } from '../log/log-buffer.js';
 import { apiKeyRepository } from '../api-key/api-key.repository.js';
+import { accountsRepository } from '../accounts/accounts.repository.js';
 import { accountSelector } from './account-selector.js';
 import { getProxyAgent } from '../../lib/proxy-agent.js';
 // Antigravity channel
@@ -199,8 +200,8 @@ export class ProxyService {
       // 2.5 应用 API Key 映射的 reasoningEffort 覆盖
       this.applyReasoningEffortOverride(claudeReq, mapping.reasoningEffort);
 
-      // 3. 选择账号
-      const account = await accountSelector.selectAccount(mapping.targetModel);
+      // 3. 选择账号（带 session 粘性）
+      const account = await accountSelector.selectAccountWithSession(mapping.targetModel, claudeReq);
       if (!account) {
         throw new ProxyError(
           503,
@@ -767,6 +768,7 @@ export class ProxyService {
     account: SelectedAccount
   ): Promise<void> {
     const isStream = claudeReq.stream !== false; // 默认流式
+    const isCodex = account.openaiAccountType === 'codex';
 
     // 转换请求
     const { body: openaiBody } = convertClaudeToOpenAI(claudeReq, {
@@ -776,15 +778,36 @@ export class ProxyService {
     // 强制设置 stream
     openaiBody.stream = isStream;
 
+    // Codex 特殊处理
+    if (isCodex) {
+      openaiBody.store = false;
+      openaiBody.stream = true; // Codex endpoint 强制要求 stream: true
+      delete openaiBody.max_output_tokens; // Codex 不支持 max_output_tokens
+      // Codex endpoint 要求 instructions 必须存在
+      if (!openaiBody.instructions) {
+        openaiBody.instructions = 'You are a helpful assistant.';
+      }
+    }
+
     // 构建 URL
-    const baseUrl = account.openaiBaseUrl || DEFAULT_OPENAI_BASE_URL;
-    const url = `${baseUrl}/v1/responses`;
+    let url: string;
+    if (isCodex) {
+      url = 'https://chatgpt.com/backend-api/codex/responses';
+    } else {
+      const baseUrl = account.openaiBaseUrl || DEFAULT_OPENAI_BASE_URL;
+      url = `${baseUrl}/v1/responses`;
+    }
 
     // 构建上游请求头
     const upstreamHeaders: Record<string, string> = {
       'Content-Type': 'application/json',
-      Authorization: `Bearer ${account.openaiApiKey || context.accessToken}`,
+      Authorization: `Bearer ${isCodex ? context.accessToken : (account.openaiApiKey || context.accessToken)}`,
     };
+
+    // Codex 需要额外的 chatgpt-account-id 头
+    if (isCodex && account.chatgptAccountId) {
+      upstreamHeaders['chatgpt-account-id'] = account.chatgptAccountId;
+    }
 
     const upstreamRequestHeadersStr = JSON.stringify(upstreamHeaders);
     const upstreamRequestBodyStr = JSON.stringify(openaiBody);
@@ -824,6 +847,11 @@ export class ProxyService {
     response.headers.forEach((value, key) => {
       upstreamResponseHeaders[key] = value;
     });
+
+    // Codex: 提取并保存用量信息（从响应头）
+    if (isCodex && response.ok) {
+      this.extractAndSaveCodexUsage(account.id, upstreamResponseHeaders);
+    }
 
     // 处理错误响应
     if (!response.ok) {
@@ -940,6 +968,69 @@ export class ProxyService {
         throw new ProxyError(500, 'PARSE_ERROR', 'Failed to parse OpenAI response');
       }
     }
+  }
+
+  /**
+   * 提取并保存 Codex 用量信息（从响应头）
+   */
+  private extractAndSaveCodexUsage(
+    accountId: string,
+    headers: Record<string, string>
+  ): void {
+    const primaryUsed = parseFloat(headers['x-codex-primary-used-percent'] || '');
+    const primaryReset = parseInt(headers['x-codex-primary-reset-after-seconds'] || '', 10);
+    const secondaryUsed = parseFloat(headers['x-codex-secondary-used-percent'] || '');
+    const secondaryReset = parseInt(headers['x-codex-secondary-reset-after-seconds'] || '', 10);
+
+    // 如果没有 codex 用量头，跳过
+    if (isNaN(primaryUsed) && isNaN(secondaryUsed)) return;
+
+    const safePrimaryUsed = isNaN(primaryUsed) ? 0 : primaryUsed;
+    const safeSecondaryUsed = isNaN(secondaryUsed) ? 0 : secondaryUsed;
+
+    // 分别保存 5h 窗口和周限窗口配额
+    const primaryPercentage = Math.max(0, Math.round(100 - safePrimaryUsed));
+    const primaryResetTime = !isNaN(primaryReset) && primaryReset > 0
+      ? new Date(Date.now() + primaryReset * 1000).toISOString()
+      : null;
+
+    const secondaryPercentage = Math.max(0, Math.round(100 - safeSecondaryUsed));
+    const secondaryResetTime = !isNaN(secondaryReset) && secondaryReset > 0
+      ? new Date(Date.now() + secondaryReset * 1000).toISOString()
+      : null;
+
+    accountsRepository.upsertQuota(accountId, 'codex-5h', primaryPercentage, primaryResetTime)
+      .catch(err => logger.error({ err, accountId }, 'Failed to update codex-5h quota'));
+    accountsRepository.upsertQuota(accountId, 'codex-weekly', secondaryPercentage, secondaryResetTime)
+      .catch(err => logger.error({ err, accountId }, 'Failed to update codex-weekly quota'));
+
+    // 更新 subscriptionRaw 中的 codexUsage 快照
+    const codexUsage = {
+      primary: {
+        usedPercent: safePrimaryUsed,
+        resetAfterSeconds: isNaN(primaryReset) ? null : primaryReset,
+        windowMinutes: 300,
+      },
+      secondary: {
+        usedPercent: safeSecondaryUsed,
+        resetAfterSeconds: isNaN(secondaryReset) ? null : secondaryReset,
+        windowMinutes: 10080,
+      },
+      lastUpdated: new Date().toISOString(),
+    };
+
+    accountsRepository.findById(accountId).then(async (account) => {
+      if (!account) return;
+      const existingRaw = (account.subscriptionRaw || {}) as Record<string, unknown>;
+      await accountsRepository.update(accountId, {
+        subscriptionRaw: { ...existingRaw, codexUsage } as unknown as import('@prisma/client').Prisma.InputJsonValue,
+      });
+    }).catch(err => logger.error({ err, accountId }, 'Failed to update codex usage snapshot'));
+
+    logger.debug(
+      { accountId, primaryRemaining: primaryPercentage, weeklyRemaining: secondaryPercentage },
+      'Codex usage extracted'
+    );
   }
 
   /**
