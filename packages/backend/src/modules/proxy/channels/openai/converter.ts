@@ -68,8 +68,8 @@ export function convertClaudeToOpenAI(
     body.max_output_tokens = claudeReq.max_tokens;
   }
 
-  // temperature
-  if (claudeReq.temperature !== undefined) {
+  // temperature（Codex 模型不支持此参数）
+  if (claudeReq.temperature !== undefined && !options.targetModel.includes('codex')) {
     body.temperature = claudeReq.temperature;
   }
 
