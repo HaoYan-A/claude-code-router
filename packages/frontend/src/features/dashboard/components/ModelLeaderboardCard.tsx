@@ -1,20 +1,16 @@
 import { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
-import { useLeaderboard } from '@/lib/queries';
-import { cn } from '@/lib/utils';
-import type { LeaderboardTimeRange, LeaderboardItem } from '@claude-code-router/shared';
-import { Loader2, Trophy, Medal, Award, User } from 'lucide-react';
+import { useModelLeaderboard } from '@/lib/queries';
+import type { LeaderboardTimeRange, ModelLeaderboardItem } from '@claude-code-router/shared';
+import { Loader2, Boxes, Trophy, Medal, Award } from 'lucide-react';
 
-// 时间范围标签映射
 const TIME_RANGE_LABELS: Record<LeaderboardTimeRange, string> = {
   day: '本日',
   week: '本周',
   month: '本月',
 };
 
-// 排名图标组件
 function RankIcon({ rank }: { rank: number }) {
   if (rank === 1) {
     return <Trophy className="h-5 w-5 text-yellow-500" />;
@@ -32,60 +28,35 @@ function RankIcon({ rank }: { rank: number }) {
   );
 }
 
-// 单个排行项组件
-function LeaderboardItem({ item }: { item: LeaderboardItem }) {
-  const formatCost = (cost: number) => {
-    return `$${cost.toFixed(4)}`;
-  };
+function formatCost(cost: number) {
+  return `$${cost.toFixed(4)}`;
+}
 
+function ModelRow({ item }: { item: ModelLeaderboardItem }) {
   return (
-    <div
-      className={cn(
-        'flex items-center gap-3 rounded-lg p-3 transition-colors',
-        item.isCurrentUser && 'bg-primary/10 border border-primary/20'
-      )}
-    >
-      {/* 排名 */}
+    <div className="flex items-center gap-3 rounded-lg p-3 transition-colors">
       <div className="flex h-8 w-8 items-center justify-center">
         <RankIcon rank={item.rank} />
       </div>
 
-      {/* 头像 */}
-      <Avatar className="h-9 w-9">
-        {item.avatarUrl ? (
-          <AvatarImage src={item.avatarUrl} alt={item.username} />
-        ) : null}
-        <AvatarFallback>
-          <User className="h-4 w-4" />
-        </AvatarFallback>
-      </Avatar>
-
-      {/* 用户名和请求数 */}
-      <div className="flex-1 min-w-0">
-        <div className="flex items-center gap-2">
-          <span className={cn('font-medium truncate', item.isCurrentUser && 'text-primary')}>
-            {item.username}
-          </span>
-          {item.isCurrentUser && (
-            <span className="text-xs text-primary">(你)</span>
-          )}
+      <div className="min-w-0 flex-1">
+        <div className="flex min-w-0 items-center gap-2">
+          <span className="text-xs font-medium text-muted-foreground">{item.platform}</span>
+          <span className="truncate font-medium">{item.model}</span>
         </div>
-        <div className="text-sm text-muted-foreground">
-          {item.requestCount.toLocaleString()} 次请求
-        </div>
+        <div className="text-sm text-muted-foreground">{formatCost(item.totalCost)}</div>
       </div>
 
-      {/* 费用 */}
-      <div className={cn('text-right font-medium', item.isCurrentUser && 'text-primary')}>
-        {formatCost(item.totalCost)}
+      <div className="text-right">
+        <div className="font-medium">{item.requestCount.toLocaleString()}</div>
+        <div className="text-xs text-muted-foreground">次请求</div>
       </div>
     </div>
   );
 }
 
-// 排行榜内容组件
-function LeaderboardContent({ timeRange }: { timeRange: LeaderboardTimeRange }) {
-  const { data, isLoading, isError } = useLeaderboard(timeRange);
+function ModelLeaderboardContent({ timeRange }: { timeRange: LeaderboardTimeRange }) {
+  const { data, isLoading, isError } = useModelLeaderboard(timeRange);
 
   if (isLoading) {
     return (
@@ -98,7 +69,7 @@ function LeaderboardContent({ timeRange }: { timeRange: LeaderboardTimeRange }) 
   if (isError) {
     return (
       <div className="flex items-center justify-center py-12 text-muted-foreground">
-        Failed to load leaderboard
+        Failed to load model leaderboard
       </div>
     );
   }
@@ -116,13 +87,13 @@ function LeaderboardContent({ timeRange }: { timeRange: LeaderboardTimeRange }) 
   return (
     <div className="space-y-2">
       {items.map((item) => (
-        <LeaderboardItem key={item.userId} item={item} />
+        <ModelRow key={`${item.platform}|${item.model}`} item={item} />
       ))}
     </div>
   );
 }
 
-export function LeaderboardCard() {
+export function ModelLeaderboardCard() {
   const [timeRange, setTimeRange] = useState<LeaderboardTimeRange>('day');
 
   return (
@@ -130,13 +101,10 @@ export function LeaderboardCard() {
       <CardHeader className="pb-3">
         <div className="flex items-center justify-between">
           <CardTitle className="flex items-center gap-2 text-lg">
-            <Trophy className="h-5 w-5 text-yellow-500" />
-            平台用量排行榜
+            <Boxes className="h-5 w-5 text-muted-foreground" />
+            平台模型排行榜
           </CardTitle>
-          <Tabs
-            value={timeRange}
-            onValueChange={(v) => setTimeRange(v as LeaderboardTimeRange)}
-          >
+          <Tabs value={timeRange} onValueChange={(v) => setTimeRange(v as LeaderboardTimeRange)}>
             <TabsList className="h-8">
               {(Object.keys(TIME_RANGE_LABELS) as LeaderboardTimeRange[]).map((range) => (
                 <TabsTrigger key={range} value={range} className="text-xs px-2 py-1">
@@ -148,7 +116,7 @@ export function LeaderboardCard() {
         </div>
       </CardHeader>
       <CardContent>
-        <LeaderboardContent timeRange={timeRange} />
+        <ModelLeaderboardContent timeRange={timeRange} />
       </CardContent>
     </Card>
   );

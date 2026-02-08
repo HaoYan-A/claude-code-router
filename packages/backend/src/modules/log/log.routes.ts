@@ -26,6 +26,11 @@ router.get(
 );
 
 router.get(
+  '/model-leaderboard',
+  asyncHandler((req, res) => logController.getModelLeaderboard(req, res))
+);
+
+router.get(
   '/:id',
   validate(idParamSchema, 'params'),
   asyncHandler((req, res) => logController.getById(req, res))

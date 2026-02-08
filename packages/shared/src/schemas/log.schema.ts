@@ -35,6 +35,25 @@ export type LeaderboardQuery = z.infer<typeof leaderboardQuerySchema>;
 export type LeaderboardItem = z.infer<typeof leaderboardItemSchema>;
 export type LeaderboardResponse = z.infer<typeof leaderboardResponseSchema>;
 
+// 模型排行榜项 schema (平台 + 模型)
+export const modelLeaderboardItemSchema = z.object({
+  rank: z.number().int().min(1).max(5),
+  platform: z.string(),
+  model: z.string(),
+  requestCount: z.number().int(),
+  totalCost: z.number(),
+});
+
+// 模型排行榜响应 schema
+export const modelLeaderboardResponseSchema = z.object({
+  timeRange: z.enum(LEADERBOARD_TIME_RANGES),
+  items: z.array(modelLeaderboardItemSchema),
+});
+
+// 模型排行榜类型导出
+export type ModelLeaderboardItem = z.infer<typeof modelLeaderboardItemSchema>;
+export type ModelLeaderboardResponse = z.infer<typeof modelLeaderboardResponseSchema>;
+
 // 统计查询参数 schema
 export const logStatsQuerySchema = z.object({
   timeRange: z.enum(STATS_TIME_RANGES).optional().default('total'),

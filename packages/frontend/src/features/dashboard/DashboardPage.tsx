@@ -5,6 +5,7 @@ import { Activity, CheckCircle, XCircle, DollarSign } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { QuotaSummaryCard } from './components/QuotaSummaryCard';
 import { LeaderboardCard } from './components/LeaderboardCard';
+import { ModelLeaderboardCard } from './components/ModelLeaderboardCard';
 
 export function DashboardPage() {
   const { data, isLoading } = useLogStats('day');
@@ -107,8 +108,9 @@ export function DashboardPage() {
         <QuotaSummaryCard />
       </div>
 
-      <div className="mt-8">
+      <div className="mt-8 grid gap-4 md:grid-cols-2">
         <LeaderboardCard />
+        <ModelLeaderboardCard />
       </div>
     </div>
   );
