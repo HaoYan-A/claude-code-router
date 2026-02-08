@@ -25,6 +25,11 @@
   --radius-md: calc(var(--radius) - 2px);
   --radius-lg: var(--radius);
   --radius-xl: calc(var(--radius) + 4px);
+  --color-chart-1: hsl(var(--chart-1));
+  --color-chart-2: hsl(var(--chart-2));
+  --color-chart-3: hsl(var(--chart-3));
+  --color-chart-4: hsl(var(--chart-4));
+  --color-chart-5: hsl(var(--chart-5));
   --font-sans: 'Roboto Variable', ui-sans-serif, system-ui, sans-serif;
 }
 
@@ -49,6 +54,11 @@
   --input: 240 5.9% 90%;
   --ring: 160 84% 39%;
   --radius: 0.5rem;
+  --chart-1: 160 84% 39%;
+  --chart-2: 217 91% 60%;
+  --chart-3: 47 96% 53%;
+  --chart-4: 271 76% 53%;
+  --chart-5: 0 84% 60%;
 }
 
 .dark {
@@ -71,6 +81,11 @@
   --border: 240 3.7% 15.9%;
   --input: 240 3.7% 15.9%;
   --ring: 160 84% 45%;
+  --chart-1: 160 84% 45%;
+  --chart-2: 217 91% 60%;
+  --chart-3: 47 96% 53%;
+  --chart-4: 271 76% 53%;
+  --chart-5: 0 84% 60%;
 }
 
 * {

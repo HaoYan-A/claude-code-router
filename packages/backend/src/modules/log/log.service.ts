@@ -6,6 +6,8 @@ import type {
   LeaderboardResponse,
   ModelLeaderboardItem,
   ModelLeaderboardResponse,
+  ChartTimeRange,
+  CostBreakdownItem,
 } from '@claude-code-router/shared';
 import { ErrorCodes } from '@claude-code-router/shared';
 import { logRepository } from './log.repository.js';
@@ -135,6 +137,24 @@ export class LogService {
       timeRange,
       items,
     };
+  }
+  async getTokenTimeseries(userId?: string, timeRange: ChartTimeRange = 'day') {
+    return logRepository.getTokenTimeseries(userId, timeRange);
+  }
+
+  async getCostBreakdown(userId?: string, timeRange: ChartTimeRange = 'day') {
+    const data = await logRepository.getCostBreakdown(userId, timeRange);
+
+    if (data.length <= 5) {
+      return data;
+    }
+
+    const top5 = data.slice(0, 5);
+    const others = data.slice(5);
+    const otherCost = others.reduce((sum, item) => sum + item.cost, 0);
+
+    const result: CostBreakdownItem[] = [...top5, { model: '其他', cost: otherCost }];
+    return result;
   }
 }
 

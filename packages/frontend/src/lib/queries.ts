@@ -19,6 +19,9 @@ import type {
   LeaderboardTimeRange,
   LeaderboardResponse,
   ModelLeaderboardResponse,
+  ChartTimeRange,
+  TokenTimeseriesResponse,
+  CostBreakdownResponse,
 } from '@claude-code-router/shared';
 
 interface ApiResponse<T> {
@@ -256,6 +259,25 @@ export function useModelLeaderboard(timeRange: LeaderboardTimeRange = 'day') {
     queryKey: ['model-leaderboard', timeRange],
     queryFn: () =>
       api.get<ApiResponse<ModelLeaderboardResponse>>(`/logs/model-leaderboard?timeRange=${timeRange}`),
+    staleTime: 60 * 1000,
+  });
+}
+
+// Chart data
+export function useTokenTimeseries(timeRange: ChartTimeRange = 'day') {
+  return useQuery({
+    queryKey: ['logs', 'timeseries', timeRange],
+    queryFn: () =>
+      api.get<ApiResponse<TokenTimeseriesResponse>>(`/logs/stats/timeseries?timeRange=${timeRange}`),
+    staleTime: 60 * 1000,
+  });
+}
+
+export function useCostBreakdown(timeRange: ChartTimeRange = 'day') {
+  return useQuery({
+    queryKey: ['logs', 'cost-breakdown', timeRange],
+    queryFn: () =>
+      api.get<ApiResponse<CostBreakdownResponse>>(`/logs/stats/cost-breakdown?timeRange=${timeRange}`),
     staleTime: 60 * 1000,
   });
 }

@@ -1,5 +1,6 @@
-import type { RequestLog, Prisma, RequestStatus } from '@prisma/client';
-import type { LogFilterSchema, RequestLogSummary, StatsTimeRange, LeaderboardTimeRange } from '@claude-code-router/shared';
+import type { RequestLog, RequestStatus } from '@prisma/client';
+import { Prisma } from '@prisma/client';
+import type { LogFilterSchema, RequestLogSummary, StatsTimeRange, LeaderboardTimeRange, ChartTimeRange, TokenTimeseriesItem, CostBreakdownItem } from '@claude-code-router/shared';
 import { prisma } from '../../lib/prisma.js';
 
 export class LogRepository {
@@ -281,6 +282,115 @@ export class LogRepository {
       orderBy: [{ _count: { id: 'desc' } }, { _sum: { cost: 'desc' } }],
       take: 100,
     });
+  }
+
+  private getChartStartDate(timeRange: ChartTimeRange): Date {
+    const now = new Date();
+    if (timeRange === 'day') {
+      return new Date(now.getTime() - 24 * 60 * 60 * 1000);
+    }
+    if (timeRange === 'week') {
+      return new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+    }
+    return new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+  }
+
+  private fillEmptyBuckets(
+    data: { time: Date; inputTokens: bigint; outputTokens: bigint }[],
+    timeRange: ChartTimeRange,
+    startDate: Date
+  ): TokenTimeseriesItem[] {
+    const dataMap = new Map(
+      data.map((d) => [d.time.toISOString(), d])
+    );
+
+    const buckets: TokenTimeseriesItem[] = [];
+    const now = new Date();
+    const truncHour = (d: Date) =>
+      new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate(), d.getUTCHours()));
+    const truncDay = (d: Date) =>
+      new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()));
+
+    if (timeRange === 'day') {
+      const start = truncHour(startDate);
+      for (let i = 0; i < 25; i++) {
+        const t = new Date(start.getTime() + i * 60 * 60 * 1000);
+        if (t > now) break;
+        const key = t.toISOString();
+        const match = dataMap.get(key);
+        buckets.push({
+          time: t.toISOString(),
+          inputTokens: match ? Number(match.inputTokens) : 0,
+          outputTokens: match ? Number(match.outputTokens) : 0,
+        });
+      }
+    } else {
+      const totalDays = timeRange === 'week' ? 7 : 30;
+      const start = truncDay(startDate);
+      for (let i = 0; i <= totalDays; i++) {
+        const t = new Date(start.getTime() + i * 24 * 60 * 60 * 1000);
+        if (t > now) break;
+        const key = t.toISOString();
+        const match = dataMap.get(key);
+        buckets.push({
+          time: t.toISOString(),
+          inputTokens: match ? Number(match.inputTokens) : 0,
+          outputTokens: match ? Number(match.outputTokens) : 0,
+        });
+      }
+    }
+
+    return buckets;
+  }
+
+  async getTokenTimeseries(userId?: string, timeRange: ChartTimeRange = 'day'): Promise<TokenTimeseriesItem[]> {
+    const startDate = this.getChartStartDate(timeRange);
+    const truncFn = timeRange === 'day' ? 'hour' : 'day';
+
+    const userClause = userId ? `AND user_id = $3` : '';
+    const params: unknown[] = [truncFn, startDate];
+    if (userId) params.push(userId);
+
+    const data = await prisma.$queryRawUnsafe<{ time: Date; inputTokens: bigint; outputTokens: bigint }[]>(
+      `SELECT
+        DATE_TRUNC($1, created_at) as time,
+        COALESCE(SUM(input_tokens), 0) as "inputTokens",
+        COALESCE(SUM(output_tokens), 0) as "outputTokens"
+      FROM request_logs
+      WHERE created_at >= $2
+        AND status = 'success'
+        ${userClause}
+      GROUP BY 1
+      ORDER BY 1 ASC`,
+      ...params
+    );
+
+    return this.fillEmptyBuckets(data, timeRange, startDate);
+  }
+
+  async getCostBreakdown(userId?: string, timeRange: ChartTimeRange = 'day'): Promise<CostBreakdownItem[]> {
+    const startDate = this.getChartStartDate(timeRange);
+
+    const userClause = userId ? `AND user_id = $2` : '';
+    const params: unknown[] = [startDate];
+    if (userId) params.push(userId);
+
+    const data = await prisma.$queryRawUnsafe<{ model: string; cost: number }[]>(
+      `SELECT
+        COALESCE(target_model, model) as model,
+        SUM(cost)::float as cost
+      FROM request_logs
+      WHERE created_at >= $1
+        AND status = 'success'
+        AND COALESCE(target_model, model) IS NOT NULL
+        ${userClause}
+      GROUP BY COALESCE(target_model, model)
+      ORDER BY cost DESC
+      LIMIT 6`,
+      ...params
+    );
+
+    return data;
   }
 }
 

@@ -31,6 +31,16 @@ router.get(
 );
 
 router.get(
+  '/stats/timeseries',
+  asyncHandler((req, res) => logController.getTokenTimeseries(req, res))
+);
+
+router.get(
+  '/stats/cost-breakdown',
+  asyncHandler((req, res) => logController.getCostBreakdown(req, res))
+);
+
+router.get(
   '/:id',
   validate(idParamSchema, 'params'),
   asyncHandler((req, res) => logController.getById(req, res))

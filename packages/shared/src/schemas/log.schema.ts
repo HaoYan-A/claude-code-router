@@ -147,3 +147,30 @@ export type LogFilterSchema = z.infer<typeof logFilterSchema>;
 export type RequestLogResponse = z.infer<typeof requestLogResponseSchema>;
 export type RequestLogSummary = z.infer<typeof requestLogSummarySchema>;
 export type PaginatedLogsResponse = z.infer<typeof paginatedLogsResponseSchema>;
+
+// 图表时间范围（不含 'total'）
+export const CHART_TIME_RANGES = ['day', 'week', 'month'] as const;
+export type ChartTimeRange = (typeof CHART_TIME_RANGES)[number];
+
+export const chartTimeRangeQuerySchema = z.object({
+  timeRange: z.enum(CHART_TIME_RANGES).optional().default('day'),
+});
+
+// Token 时序数据
+export const tokenTimeseriesItemSchema = z.object({
+  time: z.string(),
+  inputTokens: z.number(),
+  outputTokens: z.number(),
+});
+export const tokenTimeseriesResponseSchema = z.array(tokenTimeseriesItemSchema);
+export type TokenTimeseriesItem = z.infer<typeof tokenTimeseriesItemSchema>;
+export type TokenTimeseriesResponse = z.infer<typeof tokenTimeseriesResponseSchema>;
+
+// 费用按模型分组
+export const costBreakdownItemSchema = z.object({
+  model: z.string(),
+  cost: z.number(),
+});
+export const costBreakdownResponseSchema = z.array(costBreakdownItemSchema);
+export type CostBreakdownItem = z.infer<typeof costBreakdownItemSchema>;
+export type CostBreakdownResponse = z.infer<typeof costBreakdownResponseSchema>;

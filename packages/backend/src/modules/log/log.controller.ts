@@ -1,6 +1,6 @@
 import type { Request, Response } from 'express';
 import type { LogFilterSchema } from '@claude-code-router/shared';
-import { logStatsQuerySchema, leaderboardQuerySchema } from '@claude-code-router/shared';
+import { logStatsQuerySchema, leaderboardQuerySchema, chartTimeRangeQuerySchema } from '@claude-code-router/shared';
 import { logService } from './log.service.js';
 
 export class LogController {
@@ -38,6 +38,20 @@ export class LogController {
     const { timeRange } = leaderboardQuerySchema.parse(req.query);
     const leaderboard = await logService.getModelLeaderboard(timeRange);
     res.json({ success: true, data: leaderboard });
+  }
+
+  async getTokenTimeseries(req: Request, res: Response): Promise<void> {
+    const userId = req.auth!.role === 'admin' ? undefined : req.auth!.userId;
+    const { timeRange } = chartTimeRangeQuerySchema.parse(req.query);
+    const data = await logService.getTokenTimeseries(userId, timeRange);
+    res.json({ success: true, data });
+  }
+
+  async getCostBreakdown(req: Request, res: Response): Promise<void> {
+    const userId = req.auth!.role === 'admin' ? undefined : req.auth!.userId;
+    const { timeRange } = chartTimeRangeQuerySchema.parse(req.query);
+    const data = await logService.getCostBreakdown(userId, timeRange);
+    res.json({ success: true, data });
   }
 }
 
