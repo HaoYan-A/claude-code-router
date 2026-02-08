@@ -12,6 +12,7 @@ export const modelQuotaSummarySchema = z.object({
 export const quotaSummaryResponseSchema = z.object({
   claude: modelQuotaSummarySchema.nullable(),
   gemini: modelQuotaSummarySchema.nullable(),
+  openai: modelQuotaSummarySchema.nullable(),
   lastUpdatedAt: z.string(),
 });
 

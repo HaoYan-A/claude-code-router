@@ -61,8 +61,8 @@ const PRESETS: Preset[] = [
   {
     label: 'Codex',
     mappings: [
-      { claudeModel: 'opus', platform: 'openai', targetModel: 'gpt-5.2-codex', reasoningEffort: 'high' },
-      { claudeModel: 'sonnet', platform: 'openai', targetModel: 'gpt-5.2-codex', reasoningEffort: 'high' },
+      { claudeModel: 'opus', platform: 'openai', targetModel: 'gpt-5.3-codex', reasoningEffort: 'high' },
+      { claudeModel: 'sonnet', platform: 'openai', targetModel: 'gpt-5.3-codex', reasoningEffort: 'high' },
       { claudeModel: 'haiku', platform: 'openai', targetModel: 'gpt-5.1-codex-mini', reasoningEffort: 'auto' },
     ],
   },

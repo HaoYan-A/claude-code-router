@@ -2,7 +2,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { useQuotaSummary } from '@/lib/queries';
 import { cn } from '@/lib/utils';
 import type { ModelQuotaSummary } from '@claude-code-router/shared';
-import { Loader2, Sparkles, Zap } from 'lucide-react';
+import { Brain, Loader2, Sparkles, Zap } from 'lucide-react';
 
 function getProgressColor(percentage: number): string {
   if (percentage > 50) {
@@ -74,7 +74,7 @@ export function QuotaSummaryCard() {
     return (
       <Card>
         <CardHeader>
-          <CardTitle className="text-lg">额度汇总</CardTitle>
+          <CardTitle className="text-lg">平台额度汇总</CardTitle>
         </CardHeader>
         <CardContent className="flex items-center justify-center py-8">
           <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
@@ -86,14 +86,14 @@ export function QuotaSummaryCard() {
   const summary = data?.data;
 
   // 如果没有任何数据，不显示卡片
-  if (!summary?.claude && !summary?.gemini) {
+  if (!summary?.claude && !summary?.gemini && !summary?.openai) {
     return null;
   }
 
   return (
     <Card>
       <CardHeader>
-        <CardTitle className="text-lg">额度汇总</CardTitle>
+        <CardTitle className="text-lg">平台额度汇总</CardTitle>
       </CardHeader>
       <CardContent className="space-y-6">
         <QuotaDisplay
@@ -105,6 +105,11 @@ export function QuotaSummaryCard() {
           label="Gemini"
           icon={<Zap className="h-4 w-4 text-blue-500" />}
           summary={summary?.gemini ?? null}
+        />
+        <QuotaDisplay
+          label="OpenAI"
+          icon={<Brain className="h-4 w-4 text-green-500" />}
+          summary={summary?.openai ?? null}
         />
       </CardContent>
     </Card>

@@ -1,15 +1,7 @@
-import { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useModelLeaderboard } from '@/lib/queries';
 import type { LeaderboardTimeRange, ModelLeaderboardItem } from '@claude-code-router/shared';
 import { Loader2, Boxes, Trophy, Medal, Award } from 'lucide-react';
-
-const TIME_RANGE_LABELS: Record<LeaderboardTimeRange, string> = {
-  day: '本日',
-  week: '本周',
-  month: '本月',
-};
 
 function RankIcon({ rank }: { rank: number }) {
   if (rank === 1) {
@@ -93,27 +85,14 @@ function ModelLeaderboardContent({ timeRange }: { timeRange: LeaderboardTimeRang
   );
 }
 
-export function ModelLeaderboardCard() {
-  const [timeRange, setTimeRange] = useState<LeaderboardTimeRange>('day');
-
+export function ModelLeaderboardCard({ timeRange }: { timeRange: LeaderboardTimeRange }) {
   return (
     <Card>
       <CardHeader className="pb-3">
-        <div className="flex items-center justify-between">
-          <CardTitle className="flex items-center gap-2 text-lg">
-            <Boxes className="h-5 w-5 text-muted-foreground" />
-            平台模型排行榜
-          </CardTitle>
-          <Tabs value={timeRange} onValueChange={(v) => setTimeRange(v as LeaderboardTimeRange)}>
-            <TabsList className="h-8">
-              {(Object.keys(TIME_RANGE_LABELS) as LeaderboardTimeRange[]).map((range) => (
-                <TabsTrigger key={range} value={range} className="text-xs px-2 py-1">
-                  {TIME_RANGE_LABELS[range]}
-                </TabsTrigger>
-              ))}
-            </TabsList>
-          </Tabs>
-        </div>
+        <CardTitle className="flex items-center gap-2 text-lg">
+          <Boxes className="h-5 w-5 text-muted-foreground" />
+          平台模型排行榜
+        </CardTitle>
       </CardHeader>
       <CardContent>
         <ModelLeaderboardContent timeRange={timeRange} />

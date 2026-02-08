@@ -60,8 +60,8 @@ export function DashboardPage() {
       </div>
 
       <div className="mt-8 grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-        <LeaderboardCard />
-        <ModelLeaderboardCard />
+        <LeaderboardCard timeRange={timeRange} />
+        <ModelLeaderboardCard timeRange={timeRange} />
         <QuotaSummaryCard />
       </div>
     </div>

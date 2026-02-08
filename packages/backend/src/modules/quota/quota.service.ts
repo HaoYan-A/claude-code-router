@@ -21,6 +21,7 @@ export class QuotaService {
     // 按模型类别分组汇总
     const claudeQuotas: { accountId: string; percentage: number }[] = [];
     const geminiQuotas: { accountId: string; percentage: number }[] = [];
+    const openaiQuotas: { accountId: string; percentage: number }[] = [];
 
     for (const quota of quotas) {
       const modelLower = quota.modelName.toLowerCase();
@@ -28,16 +29,20 @@ export class QuotaService {
         claudeQuotas.push({ accountId: quota.accountId, percentage: quota.percentage });
       } else if (modelLower.includes('gemini')) {
         geminiQuotas.push({ accountId: quota.accountId, percentage: quota.percentage });
+      } else if (modelLower.includes('codex-5h') || modelLower.includes('codex-weekly') || modelLower.includes('openai')) {
+        openaiQuotas.push({ accountId: quota.accountId, percentage: quota.percentage });
       }
     }
 
     // 计算汇总
     const claudeSummary = this.calculateSummary(claudeQuotas);
     const geminiSummary = this.calculateSummary(geminiQuotas);
+    const openaiSummary = this.calculateSummary(openaiQuotas);
 
     return {
       claude: claudeSummary,
       gemini: geminiSummary,
+      openai: openaiSummary,
       lastUpdatedAt: new Date().toISOString(),
     };
   }

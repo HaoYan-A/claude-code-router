@@ -14,5 +14,6 @@ export interface ModelQuotaSummary {
 export interface QuotaSummaryResponse {
   claude: ModelQuotaSummary | null;
   gemini: ModelQuotaSummary | null;
+  openai: ModelQuotaSummary | null;
   lastUpdatedAt: string;
 }
