@@ -28,6 +28,7 @@ export function AccountDetailPanel({ account, onEdit, onDeleted }: AccountDetail
 
   const displayName = account.name || account.platformId.slice(0, 8);
   const initials = displayName.slice(0, 2).toUpperCase();
+  const subscriptionRaw = account.subscriptionRaw as Record<string, unknown> | null;
 
   return (
     <div className="space-y-4">
@@ -83,6 +84,29 @@ export function AccountDetailPanel({ account, onEdit, onDeleted }: AccountDetail
                 <span className="text-muted-foreground">令牌到期</span>
                 <p className="mt-1">
                   {new Date(account.tokenExpiresAt).toLocaleDateString()}
+                </p>
+              </div>
+            )}
+            {!!subscriptionRaw?.subscriptionActiveStart && (
+              <div>
+                <span className="text-muted-foreground">订阅开始</span>
+                <p className="mt-1">
+                  {new Date(subscriptionRaw.subscriptionActiveStart as string).toLocaleDateString()}
+                </p>
+              </div>
+            )}
+            {Array.isArray(subscriptionRaw?.organizations) && subscriptionRaw.organizations.length > 0 && (
+              <div>
+                <span className="text-muted-foreground">组织</span>
+                <p className="mt-1">
+                  {(subscriptionRaw.organizations as Array<{ title: string; role: string }>).map(
+                    (org, i) => (
+                      <span key={i}>
+                        {i > 0 && ', '}
+                        {org.title} ({org.role})
+                      </span>
+                    )
+                  )}
                 </p>
               </div>
             )}

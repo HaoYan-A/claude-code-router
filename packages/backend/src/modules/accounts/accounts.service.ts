@@ -259,13 +259,26 @@ export class AccountsService {
     try {
       const tokenResponse = await codexService.refreshAccessToken(account.refreshToken!);
 
-      await accountsRepository.update(id, {
+      const updateData: Record<string, unknown> = {
         accessToken: tokenResponse.access_token,
         refreshToken: tokenResponse.refresh_token,
         tokenExpiresAt: new Date(Date.now() + tokenResponse.expires_in * 1000),
         status: 'active',
         errorMessage: null,
-      });
+      };
+
+      // 如果返回了 id_token，提取并更新订阅信息
+      if (tokenResponse.id_token) {
+        const idPayload = codexService.parseIdToken(tokenResponse.id_token);
+        const subUpdate = codexService.buildSubscriptionUpdate(idPayload);
+        updateData.subscriptionTier = subUpdate.subscriptionTier;
+        updateData.subscriptionExpiresAt = subUpdate.subscriptionExpiresAt;
+        // 合并已有的 subscriptionRaw（保留 codexUsage 等字段）
+        const existingRaw = (account.subscriptionRaw as Record<string, unknown>) ?? {};
+        updateData.subscriptionRaw = { ...existingRaw, ...subUpdate.subscriptionRawPatch };
+      }
+
+      await accountsRepository.update(id, updateData);
 
       return { success: true, message: 'Codex token refreshed successfully' };
     } catch (error) {
@@ -362,14 +375,10 @@ export class AccountsService {
     // 2. 交换 tokens
     const tokenResponse = await codexService.exchangeCodeForTokens(code, state);
 
-    // 3. 解析 id_token 获取用户信息
-    let chatgptAccountId: string | undefined;
-    let email: string | undefined;
-    if (tokenResponse.id_token) {
-      const idPayload = codexService.parseIdToken(tokenResponse.id_token);
-      chatgptAccountId = idPayload.chatgptAccountId;
-      email = idPayload.email;
-    }
+    // 3. 解析 id_token 获取用户信息和订阅数据
+    const idPayload = codexService.parseIdToken(tokenResponse.id_token ?? '');
+    const chatgptAccountId = idPayload.chatgptAccountId;
+    const email = idPayload.email;
 
     const platformId = chatgptAccountId || `codex-${randomUUID().substring(0, 8)}`;
 
@@ -379,7 +388,10 @@ export class AccountsService {
       throw new AppError(409, ErrorCodes.ACCOUNT_ALREADY_EXISTS, 'Codex account already exists');
     }
 
-    // 5. 创建账号
+    // 5. 构建订阅数据
+    const subUpdate = codexService.buildSubscriptionUpdate(idPayload);
+
+    // 6. 创建账号
     const account = await accountsRepository.create({
       platform: 'openai',
       platformId,
@@ -388,10 +400,9 @@ export class AccountsService {
       refreshToken: tokenResponse.refresh_token,
       tokenExpiresAt: new Date(Date.now() + tokenResponse.expires_in * 1000),
       openaiAccountType: 'codex',
-      subscriptionRaw: {
-        chatgptAccountId: chatgptAccountId || null,
-        email: email || null,
-      } as Prisma.InputJsonValue,
+      subscriptionTier: subUpdate.subscriptionTier,
+      subscriptionExpiresAt: subUpdate.subscriptionExpiresAt,
+      subscriptionRaw: subUpdate.subscriptionRawPatch as Prisma.InputJsonValue,
       status: 'active',
       priority,
       schedulable,
