@@ -25,7 +25,24 @@ export interface CodexIdTokenPayload {
   chatgptAccountId?: string;
   email?: string;
   sub?: string;
+  planType?: string;
+  subscriptionActiveStart?: string;
+  subscriptionActiveUntil?: string;
+  organizations?: Array<{
+    id: string;
+    is_default: boolean;
+    role: string;
+    title: string;
+  }>;
 }
+
+// planType → subscriptionTier 映射
+const PLAN_TIER_MAP: Record<string, string> = {
+  free: 'FREE',
+  plus: 'PLUS',
+  pro: 'PRO',
+  team: 'TEAM',
+};
 
 interface OAuthStateData {
   verifier: string;
@@ -207,14 +224,38 @@ export class CodexService {
         throw new Error('Invalid JWT format');
       }
       const payload = JSON.parse(Buffer.from(parts[1], 'base64url').toString('utf-8'));
+      const authData = payload['https://api.openai.com/auth'];
       return {
-        chatgptAccountId: payload['https://api.openai.com/auth']?.user_id || payload.sub,
+        chatgptAccountId: authData?.user_id || payload.sub,
         email: payload.email,
+        planType: authData?.chatgpt_plan_type,
+        subscriptionActiveStart: authData?.chatgpt_subscription_active_start,
+        subscriptionActiveUntil: authData?.chatgpt_subscription_active_until,
+        organizations: authData?.organizations,
       };
     } catch (error) {
       logger.warn({ error }, 'Failed to parse Codex id_token');
       return {};
     }
+  }
+
+  /**
+   * 从 id_token payload 构建订阅更新数据
+   */
+  buildSubscriptionUpdate(idPayload: CodexIdTokenPayload) {
+    return {
+      subscriptionTier: PLAN_TIER_MAP[idPayload.planType ?? ''] ?? idPayload.planType?.toUpperCase() ?? null,
+      subscriptionExpiresAt: idPayload.subscriptionActiveUntil
+        ? new Date(idPayload.subscriptionActiveUntil)
+        : null,
+      subscriptionRawPatch: {
+        chatgptAccountId: idPayload.chatgptAccountId ?? null,
+        email: idPayload.email ?? null,
+        planType: idPayload.planType ?? null,
+        subscriptionActiveStart: idPayload.subscriptionActiveStart ?? null,
+        organizations: idPayload.organizations ?? null,
+      },
+    };
   }
 }
 

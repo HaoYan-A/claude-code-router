@@ -314,6 +314,16 @@ export class AccountSelector {
           errorMessage: null,
         };
 
+        // 如果返回了 id_token，提取并更新订阅信息
+        if (tokenData.id_token) {
+          const idPayload = codexService.parseIdToken(tokenData.id_token);
+          const subUpdate = codexService.buildSubscriptionUpdate(idPayload);
+          updateData.subscriptionTier = subUpdate.subscriptionTier;
+          updateData.subscriptionExpiresAt = subUpdate.subscriptionExpiresAt;
+          const existingRaw = (account.subscriptionRaw as Record<string, unknown>) ?? {};
+          updateData.subscriptionRaw = { ...existingRaw, ...subUpdate.subscriptionRawPatch };
+        }
+
         await accountsRepository.update(account.id, updateData);
 
         logger.info(
