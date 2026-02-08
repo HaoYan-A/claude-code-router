@@ -9,24 +9,24 @@ interface QuotaBreakdownCardProps {
   accountId: string;
 }
 
-// 将模型聚合为 Claude 和 Gemini 两类
+// 聚合配额：Antigravity 按 Claude/Gemini 分类，OpenAI 按 5h/周限分类
 function aggregateQuotas(quotas: AccountQuota[]) {
   if (!quotas || quotas.length === 0) return [];
 
-  const claudeQuota = quotas.find((q) =>
-    q.modelName.toLowerCase().includes('claude')
-  );
-  const geminiQuota = quotas.find((q) =>
-    q.modelName.toLowerCase().includes('gemini')
-  );
-
   const result = [];
-  if (claudeQuota) {
-    result.push({ ...claudeQuota, modelName: 'Claude' });
-  }
-  if (geminiQuota) {
-    result.push({ ...geminiQuota, modelName: 'Gemini' });
-  }
+
+  // Antigravity: Claude / Gemini
+  const claudeQuota = quotas.find((q) => q.modelName.toLowerCase().includes('claude'));
+  const geminiQuota = quotas.find((q) => q.modelName.toLowerCase().includes('gemini'));
+  if (claudeQuota) result.push({ ...claudeQuota, modelName: 'Claude' });
+  if (geminiQuota) result.push({ ...geminiQuota, modelName: 'Gemini' });
+
+  // OpenAI Codex: 5h / 周限
+  const codex5h = quotas.find((q) => q.modelName === 'codex-5h');
+  const codexWeekly = quotas.find((q) => q.modelName === 'codex-weekly');
+  if (codex5h) result.push({ ...codex5h, modelName: '5h' });
+  if (codexWeekly) result.push({ ...codexWeekly, modelName: '周限' });
+
   return result;
 }
 

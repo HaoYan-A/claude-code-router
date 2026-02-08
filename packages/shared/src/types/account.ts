@@ -54,6 +54,7 @@ export interface ThirdPartyAccount {
   // OpenAI 特有字段
   openaiApiKey: string | null;
   openaiBaseUrl: string | null;
+  openaiAccountType: string | null;
 
   // 时间戳
   createdAt: Date;

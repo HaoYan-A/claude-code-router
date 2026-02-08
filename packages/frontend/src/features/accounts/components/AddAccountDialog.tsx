@@ -12,18 +12,44 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import { ExternalLink, Copy, Check, Loader2, KeyRound, Globe, FileUp, Brain } from 'lucide-react';
+import { ExternalLink, Copy, Check, Loader2, KeyRound, Globe, FileUp, Brain, ArrowLeft } from 'lucide-react';
 import { useOAuthUrl, useOAuthExchange, useCreateAccount } from '@/lib/queries/accounts';
 import { KiroImportForm } from './KiroImportForm';
 import { OpenAIImportForm } from './OpenAIImportForm';
+import { CodexOAuthForm } from './CodexOAuthForm';
 
 interface AddAccountDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }
 
+type PlatformStep = null | 'antigravity' | 'kiro' | 'openai';
+
+const PLATFORMS = [
+  {
+    id: 'antigravity' as const,
+    name: 'Antigravity',
+    description: 'Google Gemini 代理，OAuth 或 Token 导入',
+    icon: Globe,
+  },
+  {
+    id: 'kiro' as const,
+    name: 'Kiro',
+    description: 'Amazon Q Developer，文件导入',
+    icon: FileUp,
+  },
+  {
+    id: 'openai' as const,
+    name: 'OpenAI',
+    description: 'API Key 或 Codex OAuth 授权',
+    icon: Brain,
+  },
+];
+
 export function AddAccountDialog({ open, onOpenChange }: AddAccountDialogProps) {
-  const [tab, setTab] = useState<'oauth' | 'manual' | 'kiro' | 'openai'>('oauth');
+  const [selectedPlatform, setSelectedPlatform] = useState<PlatformStep>(null);
+  const [antigravityTab, setAntigravityTab] = useState<'oauth' | 'manual'>('oauth');
+  const [openaiTab, setOpenaiTab] = useState<'apikey' | 'codex'>('apikey');
 
   // OAuth state
   const [codeUrl, setCodeUrl] = useState('');
@@ -85,7 +111,9 @@ export function AddAccountDialog({ open, onOpenChange }: AddAccountDialogProps) 
   const handleClose = () => {
     onOpenChange(false);
     setTimeout(() => {
-      setTab('oauth');
+      setSelectedPlatform(null);
+      setAntigravityTab('oauth');
+      setOpenaiTab('apikey');
       setCodeUrl('');
       setOAuthName('');
       setOAuthPriority(50);
@@ -97,233 +125,301 @@ export function AddAccountDialog({ open, onOpenChange }: AddAccountDialogProps) 
     }, 200);
   };
 
+  const handleBack = () => {
+    setSelectedPlatform(null);
+  };
+
   const isPending = oauthExchange.isPending || createAccount.isPending;
+
+  const platformTitle = selectedPlatform
+    ? PLATFORMS.find((p) => p.id === selectedPlatform)?.name
+    : null;
 
   return (
     <Dialog open={open} onOpenChange={handleClose}>
       <DialogContent className="sm:max-w-[520px]">
         <DialogHeader>
-          <DialogTitle>添加第三方账户</DialogTitle>
+          <DialogTitle>
+            {selectedPlatform ? (
+              <span className="flex items-center gap-2">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  className="h-7 w-7 -ml-1"
+                  onClick={handleBack}
+                >
+                  <ArrowLeft className="h-4 w-4" />
+                </Button>
+                添加 {platformTitle} 账户
+              </span>
+            ) : (
+              '添加第三方账户'
+            )}
+          </DialogTitle>
           <DialogDescription>
-            连接您的第三方账户以使用其 API 配额
+            {selectedPlatform
+              ? `配置您的 ${platformTitle} 账户信息`
+              : '选择要连接的平台类型'}
           </DialogDescription>
         </DialogHeader>
 
-        <Tabs value={tab} onValueChange={(v) => setTab(v as 'oauth' | 'manual' | 'kiro' | 'openai')}>
-          <TabsList className="grid w-full grid-cols-4">
-            <TabsTrigger value="oauth" className="flex items-center gap-2">
-              <Globe className="h-4 w-4" />
-              OAuth
-            </TabsTrigger>
-            <TabsTrigger value="manual" className="flex items-center gap-2">
-              <KeyRound className="h-4 w-4" />
-              手动令牌
-            </TabsTrigger>
-            <TabsTrigger value="kiro" className="flex items-center gap-2">
-              <FileUp className="h-4 w-4" />
-              Kiro
-            </TabsTrigger>
-            <TabsTrigger value="openai" className="flex items-center gap-2">
-              <Brain className="h-4 w-4" />
-              OpenAI
-            </TabsTrigger>
-          </TabsList>
-
-          <TabsContent value="oauth" className="mt-4">
-            <form onSubmit={handleOAuthSubmit}>
-              <div className="space-y-4">
-                {/* Step 1: Open OAuth */}
-                <div className="rounded-lg border p-4 space-y-3">
-                  <div className="flex items-center gap-2">
-                    <div className="flex h-6 w-6 items-center justify-center rounded-full bg-primary text-primary-foreground text-sm font-medium">
-                      1
-                    </div>
-                    <span className="font-medium">打开授权页面</span>
+        {/* Step 1: Platform Selection */}
+        {!selectedPlatform && (
+          <div className="space-y-3 py-2">
+            {PLATFORMS.map((platform) => {
+              const Icon = platform.icon;
+              return (
+                <button
+                  key={platform.id}
+                  type="button"
+                  className="w-full flex items-center gap-4 rounded-lg border p-4 text-left transition-colors hover:bg-muted/50 hover:border-primary/50"
+                  onClick={() => setSelectedPlatform(platform.id)}
+                >
+                  <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-muted">
+                    <Icon className="h-5 w-5 text-muted-foreground" />
                   </div>
-                  <p className="text-sm text-muted-foreground pl-8">
-                    点击下方按钮在新窗口中打开 Antigravity 登录页面
-                  </p>
-                  <div className="flex items-center gap-2 pl-8">
-                    <Button type="button" onClick={handleOpenOAuth} disabled={!oauthUrl}>
-                      <ExternalLink className="mr-2 h-4 w-4" />
-                      打开登录
-                    </Button>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="icon"
-                      onClick={handleCopyUrl}
-                      disabled={!oauthUrl}
-                    >
-                      {copied ? (
-                        <Check className="h-4 w-4 text-green-500" />
-                      ) : (
-                        <Copy className="h-4 w-4" />
-                      )}
-                    </Button>
+                  <div>
+                    <div className="font-medium">{platform.name}</div>
+                    <div className="text-sm text-muted-foreground">
+                      {platform.description}
+                    </div>
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+        )}
+
+        {/* Step 2: Platform-specific forms */}
+        {selectedPlatform === 'antigravity' && (
+          <Tabs value={antigravityTab} onValueChange={(v) => setAntigravityTab(v as 'oauth' | 'manual')}>
+            <TabsList className="grid w-full grid-cols-2">
+              <TabsTrigger value="oauth" className="flex items-center gap-2">
+                <Globe className="h-4 w-4" />
+                OAuth
+              </TabsTrigger>
+              <TabsTrigger value="manual" className="flex items-center gap-2">
+                <KeyRound className="h-4 w-4" />
+                手动令牌
+              </TabsTrigger>
+            </TabsList>
+
+            <TabsContent value="oauth" className="mt-4">
+              <form onSubmit={handleOAuthSubmit}>
+                <div className="space-y-4">
+                  {/* Step 1: Open OAuth */}
+                  <div className="rounded-lg border p-4 space-y-3">
+                    <div className="flex items-center gap-2">
+                      <div className="flex h-6 w-6 items-center justify-center rounded-full bg-primary text-primary-foreground text-sm font-medium">
+                        1
+                      </div>
+                      <span className="font-medium">打开授权页面</span>
+                    </div>
+                    <p className="text-sm text-muted-foreground pl-8">
+                      点击下方按钮在新窗口中打开 Antigravity 登录页面
+                    </p>
+                    <div className="flex items-center gap-2 pl-8">
+                      <Button type="button" onClick={handleOpenOAuth} disabled={!oauthUrl}>
+                        <ExternalLink className="mr-2 h-4 w-4" />
+                        打开登录
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="icon"
+                        onClick={handleCopyUrl}
+                        disabled={!oauthUrl}
+                      >
+                        {copied ? (
+                          <Check className="h-4 w-4 text-green-500" />
+                        ) : (
+                          <Copy className="h-4 w-4" />
+                        )}
+                      </Button>
+                    </div>
+                  </div>
+
+                  {/* Step 2: Paste callback URL */}
+                  <div className="rounded-lg border p-4 space-y-3">
+                    <div className="flex items-center gap-2">
+                      <div className="flex h-6 w-6 items-center justify-center rounded-full bg-primary text-primary-foreground text-sm font-medium">
+                        2
+                      </div>
+                      <span className="font-medium">粘贴回调 URL</span>
+                    </div>
+                    <p className="text-sm text-muted-foreground pl-8">
+                      授权完成后，复制浏览器中的 URL 并粘贴到下方
+                    </p>
+                    <div className="pl-8">
+                      <Input
+                        placeholder="https://console.anthropic.com/...?code=..."
+                        value={codeUrl}
+                        onChange={(e) => setCodeUrl(e.target.value)}
+                      />
+                    </div>
+                  </div>
+
+                  {/* Account Settings */}
+                  <div className="space-y-4 pt-2">
+                    <div className="space-y-2">
+                      <Label htmlFor="oauth-name">名称（可选）</Label>
+                      <Input
+                        id="oauth-name"
+                        placeholder="例如：我的工作账户"
+                        value={oauthName}
+                        onChange={(e) => setOAuthName(e.target.value)}
+                      />
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <Label htmlFor="oauth-priority">优先级 (1-100)</Label>
+                        <Input
+                          id="oauth-priority"
+                          type="number"
+                          min={1}
+                          max={100}
+                          value={oauthPriority}
+                          onChange={(e) => setOAuthPriority(Number(e.target.value))}
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="oauth-schedulable">可调度</Label>
+                        <div className="flex items-center h-10">
+                          <Switch
+                            id="oauth-schedulable"
+                            checked={oauthSchedulable}
+                            onCheckedChange={setOAuthSchedulable}
+                          />
+                          <span className="ml-2 text-sm text-muted-foreground">
+                            {oauthSchedulable ? '是' : '否'}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
                   </div>
                 </div>
 
-                {/* Step 2: Paste callback URL */}
-                <div className="rounded-lg border p-4 space-y-3">
-                  <div className="flex items-center gap-2">
-                    <div className="flex h-6 w-6 items-center justify-center rounded-full bg-primary text-primary-foreground text-sm font-medium">
-                      2
-                    </div>
-                    <span className="font-medium">粘贴回调 URL</span>
-                  </div>
-                  <p className="text-sm text-muted-foreground pl-8">
-                    授权完成后，复制浏览器中的 URL 并粘贴到下方
-                  </p>
-                  <div className="pl-8">
-                    <Input
-                      placeholder="https://console.anthropic.com/...?code=..."
-                      value={codeUrl}
-                      onChange={(e) => setCodeUrl(e.target.value)}
-                    />
-                  </div>
-                </div>
+                <DialogFooter className="mt-6">
+                  <Button type="button" variant="outline" onClick={handleClose}>
+                    取消
+                  </Button>
+                  <Button type="submit" disabled={!codeUrl || isPending}>
+                    {isPending ? (
+                      <>
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        添加中...
+                      </>
+                    ) : (
+                      '添加账户'
+                    )}
+                  </Button>
+                </DialogFooter>
+              </form>
+            </TabsContent>
 
-                {/* Account Settings */}
-                <div className="space-y-4 pt-2">
+            <TabsContent value="manual" className="mt-4">
+              <form onSubmit={handleManualSubmit}>
+                <div className="space-y-4">
                   <div className="space-y-2">
-                    <Label htmlFor="oauth-name">名称（可选）</Label>
+                    <Label htmlFor="refresh-token">刷新令牌</Label>
                     <Input
-                      id="oauth-name"
-                      placeholder="例如：我的工作账户"
-                      value={oauthName}
-                      onChange={(e) => setOAuthName(e.target.value)}
+                      id="refresh-token"
+                      type="password"
+                      placeholder="输入您的刷新令牌"
+                      value={refreshToken}
+                      onChange={(e) => setRefreshToken(e.target.value)}
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      您可以在 Antigravity 账户设置中找到刷新令牌
+                    </p>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="manual-name">名称（可选）</Label>
+                    <Input
+                      id="manual-name"
+                      placeholder="例如：个人账户"
+                      value={manualName}
+                      onChange={(e) => setManualName(e.target.value)}
                     />
                   </div>
 
                   <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-2">
-                      <Label htmlFor="oauth-priority">优先级 (1-100)</Label>
+                      <Label htmlFor="manual-priority">优先级 (1-100)</Label>
                       <Input
-                        id="oauth-priority"
+                        id="manual-priority"
                         type="number"
                         min={1}
                         max={100}
-                        value={oauthPriority}
-                        onChange={(e) => setOAuthPriority(Number(e.target.value))}
+                        value={manualPriority}
+                        onChange={(e) => setManualPriority(Number(e.target.value))}
                       />
                     </div>
                     <div className="space-y-2">
-                      <Label htmlFor="oauth-schedulable">可调度</Label>
+                      <Label htmlFor="manual-schedulable">可调度</Label>
                       <div className="flex items-center h-10">
                         <Switch
-                          id="oauth-schedulable"
-                          checked={oauthSchedulable}
-                          onCheckedChange={setOAuthSchedulable}
+                          id="manual-schedulable"
+                          checked={manualSchedulable}
+                          onCheckedChange={setManualSchedulable}
                         />
                         <span className="ml-2 text-sm text-muted-foreground">
-                          {oauthSchedulable ? '是' : '否'}
+                          {manualSchedulable ? '是' : '否'}
                         </span>
                       </div>
                     </div>
                   </div>
                 </div>
-              </div>
 
-              <DialogFooter className="mt-6">
-                <Button type="button" variant="outline" onClick={handleClose}>
-                  取消
-                </Button>
-                <Button type="submit" disabled={!codeUrl || isPending}>
-                  {isPending ? (
-                    <>
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      添加中...
-                    </>
-                  ) : (
-                    '添加账户'
-                  )}
-                </Button>
-              </DialogFooter>
-            </form>
-          </TabsContent>
+                <DialogFooter className="mt-6">
+                  <Button type="button" variant="outline" onClick={handleClose}>
+                    取消
+                  </Button>
+                  <Button type="submit" disabled={!refreshToken || isPending}>
+                    {isPending ? (
+                      <>
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        添加中...
+                      </>
+                    ) : (
+                      '添加账户'
+                    )}
+                  </Button>
+                </DialogFooter>
+              </form>
+            </TabsContent>
+          </Tabs>
+        )}
 
-          <TabsContent value="manual" className="mt-4">
-            <form onSubmit={handleManualSubmit}>
-              <div className="space-y-4">
-                <div className="space-y-2">
-                  <Label htmlFor="refresh-token">刷新令牌</Label>
-                  <Input
-                    id="refresh-token"
-                    type="password"
-                    placeholder="输入您的刷新令牌"
-                    value={refreshToken}
-                    onChange={(e) => setRefreshToken(e.target.value)}
-                  />
-                  <p className="text-xs text-muted-foreground">
-                    您可以在 Antigravity 账户设置中找到刷新令牌
-                  </p>
-                </div>
+        {selectedPlatform === 'kiro' && (
+          <KiroImportForm onSuccess={handleClose} onCancel={handleClose} />
+        )}
 
-                <div className="space-y-2">
-                  <Label htmlFor="manual-name">名称（可选）</Label>
-                  <Input
-                    id="manual-name"
-                    placeholder="例如：个人账户"
-                    value={manualName}
-                    onChange={(e) => setManualName(e.target.value)}
-                  />
-                </div>
+        {selectedPlatform === 'openai' && (
+          <Tabs value={openaiTab} onValueChange={(v) => setOpenaiTab(v as 'apikey' | 'codex')}>
+            <TabsList className="grid w-full grid-cols-2">
+              <TabsTrigger value="apikey" className="flex items-center gap-2">
+                <KeyRound className="h-4 w-4" />
+                API Key
+              </TabsTrigger>
+              <TabsTrigger value="codex" className="flex items-center gap-2">
+                <Globe className="h-4 w-4" />
+                Codex OAuth
+              </TabsTrigger>
+            </TabsList>
 
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="manual-priority">优先级 (1-100)</Label>
-                    <Input
-                      id="manual-priority"
-                      type="number"
-                      min={1}
-                      max={100}
-                      value={manualPriority}
-                      onChange={(e) => setManualPriority(Number(e.target.value))}
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="manual-schedulable">可调度</Label>
-                    <div className="flex items-center h-10">
-                      <Switch
-                        id="manual-schedulable"
-                        checked={manualSchedulable}
-                        onCheckedChange={setManualSchedulable}
-                      />
-                      <span className="ml-2 text-sm text-muted-foreground">
-                        {manualSchedulable ? '是' : '否'}
-                      </span>
-                    </div>
-                  </div>
-                </div>
-              </div>
+            <TabsContent value="apikey" className="mt-4">
+              <OpenAIImportForm onSuccess={handleClose} onCancel={handleClose} />
+            </TabsContent>
 
-              <DialogFooter className="mt-6">
-                <Button type="button" variant="outline" onClick={handleClose}>
-                  取消
-                </Button>
-                <Button type="submit" disabled={!refreshToken || isPending}>
-                  {isPending ? (
-                    <>
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      添加中...
-                    </>
-                  ) : (
-                    '添加账户'
-                  )}
-                </Button>
-              </DialogFooter>
-            </form>
-          </TabsContent>
-
-          <TabsContent value="kiro" className="mt-4">
-            <KiroImportForm onSuccess={handleClose} onCancel={handleClose} />
-          </TabsContent>
-
-          <TabsContent value="openai" className="mt-4">
-            <OpenAIImportForm onSuccess={handleClose} onCancel={handleClose} />
-          </TabsContent>
-        </Tabs>
+            <TabsContent value="codex" className="mt-4">
+              <CodexOAuthForm onSuccess={handleClose} onCancel={handleClose} />
+            </TabsContent>
+          </Tabs>
+        )}
       </DialogContent>
     </Dialog>
   );

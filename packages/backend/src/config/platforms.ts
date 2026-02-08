@@ -55,3 +55,23 @@ export function isPlatformModelSupported(platform: PlatformType, modelId: string
   const models = PLATFORM_MODELS[platform]?.models ?? [];
   return models.some((m) => m.id === modelId);
 }
+
+/**
+ * OpenAI 共享配额名称
+ * - codex 类型账号使用 'codex' 作为共享配额名
+ * - responses 类型账号使用 'openai' 作为共享配额名
+ * 所有 OpenAI 模型共用同一配额，不区分模型
+ */
+export const OPENAI_SHARED_QUOTA_NAMES = ['codex-5h', 'codex-weekly', 'openai'] as const;
+
+/**
+ * 获取 targetModel 在查询配额时应匹配的所有模型名称
+ * OpenAI 平台的模型会额外匹配共享配额名 ('codex', 'openai')
+ */
+export function getQuotaModelNames(targetModel: string): string[] {
+  const openaiModels = PLATFORM_MODELS.openai.models;
+  if (openaiModels.some((m) => m.id === targetModel)) {
+    return [targetModel, ...OPENAI_SHARED_QUOTA_NAMES];
+  }
+  return [targetModel];
+}

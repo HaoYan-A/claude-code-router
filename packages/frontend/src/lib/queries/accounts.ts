@@ -178,6 +178,27 @@ export function useImportKiroAccount() {
   });
 }
 
+// 获取 Codex OAuth URL
+export function useCodexOAuthUrl() {
+  return useQuery({
+    queryKey: ['accounts', 'codex-oauth-url'],
+    queryFn: () => api.get<ApiResponse<OAuthUrlResponse>>('/accounts/codex/oauth-url'),
+    staleTime: 1000 * 60 * 5,
+  });
+}
+
+// Codex OAuth 交换
+export function useCodexOAuthExchange() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (data: OAuthExchangeInput) =>
+      api.post<ApiResponse<ThirdPartyAccount>>('/accounts/codex/exchange', data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['accounts'] });
+    },
+  });
+}
+
 // 导入 OpenAI 账号
 export function useImportOpenAIAccount() {
   const queryClient = useQueryClient();

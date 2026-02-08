@@ -9,6 +9,7 @@ export interface OpenAIResponsesRequest {
   input: OpenAIInputItem[];
   instructions?: string;
   stream?: boolean;
+  store?: boolean;
   tools?: OpenAITool[];
   tool_choice?: OpenAIToolChoice;
   max_output_tokens?: number;

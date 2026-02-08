@@ -36,6 +36,7 @@ export const thirdPartyAccountSchema = z.object({
   totalOutputTokens: z.number().int(),
   totalCacheTokens: z.number().int(),
   lastUsedAt: z.coerce.date().nullable(),
+  openaiAccountType: z.string().nullable().optional(),
   createdAt: z.coerce.date(),
   updatedAt: z.coerce.date(),
   quotas: z.array(accountQuotaSchema).optional(),
@@ -124,6 +125,14 @@ export const importOpenAIAccountSchema = z.object({
   schedulable: z.boolean().default(true),
 });
 
+// Codex OAuth 交换请求 Schema
+export const codexOauthExchangeSchema = z.object({
+  codeUrl: z.string().min(1),
+  name: z.string().min(1).max(100).optional(),
+  priority: z.number().int().min(1).max(100).default(50),
+  schedulable: z.boolean().default(true),
+});
+
 // 类型导出
 export type AccountPlatformSchema = z.infer<typeof accountPlatformSchema>;
 export type AccountStatusSchema = z.infer<typeof accountStatusSchema>;
@@ -139,3 +148,4 @@ export type PlatformModelSchema = z.infer<typeof platformModelSchema>;
 export type PlatformModelsResponseSchema = z.infer<typeof platformModelsResponseSchema>;
 export type ImportKiroAccountSchema = z.infer<typeof importKiroAccountSchema>;
 export type ImportOpenAIAccountSchema = z.infer<typeof importOpenAIAccountSchema>;
+export type CodexOAuthExchangeSchema = z.infer<typeof codexOauthExchangeSchema>;

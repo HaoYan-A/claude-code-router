@@ -55,7 +55,7 @@ export function AccountActionsCard({ account, onEdit, onDeleted }: AccountAction
           </Button>
         )}
 
-        {account.platform !== 'openai' && (
+        {(account.platform !== 'openai' || account.openaiAccountType === 'codex') && (
           <Button
             variant="outline"
             className="w-full justify-start"

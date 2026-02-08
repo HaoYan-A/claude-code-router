@@ -7,6 +7,7 @@ import type {
   AvailableAccountQuerySchema,
   ImportKiroAccountSchema,
   ImportOpenAIAccountSchema,
+  CodexOAuthExchangeSchema,
 } from '@claude-code-router/shared';
 import { accountsService } from './accounts.service.js';
 
@@ -145,6 +146,23 @@ export class AccountsController {
   async importOpenAIAccount(req: Request, res: Response): Promise<void> {
     const input = req.body as ImportOpenAIAccountSchema;
     const account = await accountsService.importOpenAIAccount(input);
+    res.status(201).json({ success: true, data: account });
+  }
+
+  /**
+   * 获取 Codex OAuth 授权 URL
+   */
+  async getCodexOAuthUrl(_req: Request, res: Response): Promise<void> {
+    const { url, state } = accountsService.getCodexOAuthUrl();
+    res.json({ success: true, data: { url, state } });
+  }
+
+  /**
+   * 使用 Codex OAuth code URL 创建账号
+   */
+  async exchangeCodexOAuthCode(req: Request, res: Response): Promise<void> {
+    const input = req.body as CodexOAuthExchangeSchema;
+    const account = await accountsService.exchangeCodexOAuthCode(input);
     res.status(201).json({ success: true, data: account });
   }
 }
