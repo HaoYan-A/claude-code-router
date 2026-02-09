@@ -193,6 +193,9 @@ function extractSystemPrompt(system?: SystemPrompt): string {
 function normalizeMessages(messages: Message[], tools: KiroTool[]): Message[] {
   const normalized: Message[] = messages.map((msg) => ({ ...msg, content: msg.content }));
 
+  // 合并连续同角色消息（Kiro API 要求 user/assistant 严格交替）
+  mergeConsecutiveMessages(normalized);
+
   // 如果最后一条是 assistant，追加 Continue 作为当前 user 消息
   if (normalized.length > 0 && normalized[normalized.length - 1].role === 'assistant') {
     normalized.push({ role: 'user', content: 'Continue' });
@@ -691,4 +694,43 @@ function mapMediaTypeToFormat(mediaType: string): 'png' | 'jpeg' | 'gif' | 'webp
   if (lower.includes('webp')) return 'webp';
 
   return null;
+}
+
+// ==================== 消息合并 ====================
+
+/**
+ * 合并连续的同角色消息（Kiro API 要求 user/assistant 严格交替）
+ */
+function mergeConsecutiveMessages(messages: Message[]): void {
+  if (messages.length <= 1) return;
+
+  let writeIndex = 0;
+
+  for (let i = 0; i < messages.length; i++) {
+    if (writeIndex > 0 && messages[writeIndex - 1].role === messages[i].role) {
+      // 合并到前一个消息
+      const prev = messages[writeIndex - 1];
+      const curr = messages[i];
+
+      const prevBlocks = normalizeContent(prev.content);
+      const currBlocks = normalizeContent(curr.content);
+
+      prev.content = [...prevBlocks, ...currBlocks];
+    } else {
+      messages[writeIndex] = messages[i];
+      writeIndex++;
+    }
+  }
+
+  messages.length = writeIndex;
+}
+
+/**
+ * 标准化消息内容为 ContentBlock 数组
+ */
+function normalizeContent(content: MessageContent): ContentBlock[] {
+  if (typeof content === 'string') {
+    return [{ type: 'text', text: content }];
+  }
+  return content;
 }
