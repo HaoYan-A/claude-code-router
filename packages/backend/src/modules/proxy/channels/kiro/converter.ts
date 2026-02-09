@@ -20,7 +20,7 @@ import type {
   Tool,
   SystemPrompt,
 } from '../../types.js';
-import { resolveEffort, effortToBudgetTokens } from '../../types.js';
+import { resolveEffort, resolveBudgetTokens } from '../../types.js';
 import type {
   KiroRequest,
   KiroHistoryMessage,
@@ -67,7 +67,7 @@ export function convertClaudeToKiro(
   const thinkingConfig = claudeReq.thinking;
   const enableThinking = !thinkingConfig || thinkingConfig.type !== 'disabled';
   const effort = resolveEffort(claudeReq);
-  const thinkingBudgetTokens = effortToBudgetTokens(effort);
+  const thinkingBudgetTokens = resolveBudgetTokens(claudeReq);
 
   // 1. 映射模型 ID（优先使用映射配置中的 targetModel）
   const kiroModelId = targetModel || mapModelId(claudeReq.model);

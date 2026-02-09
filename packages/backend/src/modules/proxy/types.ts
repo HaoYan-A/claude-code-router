@@ -296,3 +296,15 @@ export function effortToBudgetTokens(effort: EffortLevel): number {
     case 'max': return 100000;
   }
 }
+
+/**
+ * 解析请求中的 budget_tokens 数值（给支持数值的平台用：Gemini / Kiro）
+ * 优先使用原始 budget_tokens，仅在没有时才从 effort 推导
+ */
+export function resolveBudgetTokens(req: ClaudeRequest): number {
+  if (req.thinking?.budget_tokens !== undefined) {
+    return req.thinking.budget_tokens;
+  }
+  const effort = resolveEffort(req);
+  return effortToBudgetTokens(effort);
+}

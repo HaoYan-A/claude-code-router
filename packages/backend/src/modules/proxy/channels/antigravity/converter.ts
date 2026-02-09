@@ -19,7 +19,7 @@ import type {
   SystemPrompt,
   ModelSlot,
 } from '../../types.js';
-import { resolveEffort, effortToBudgetTokens } from '../../types.js';
+import { resolveEffort, resolveBudgetTokens } from '../../types.js';
 import type {
   GeminiRequest,
   GeminiInnerRequest,
@@ -282,7 +282,7 @@ function detectThinkingEnabled(req: ClaudeRequest, targetModel: string): boolean
 
   // 默认：Opus 模型启用 thinking
   const model = req.model.toLowerCase();
-  if (model.includes('opus-4-5') || model.includes('opus-4.5')) {
+  if (model.includes('opus')) {
     return targetModelSupportsThinking(targetModel);
   }
 
@@ -807,7 +807,7 @@ function buildGenerationConfig(
       };
     } else {
       config.thinkingConfig = {
-        thinkingBudget: effortToBudgetTokens(effort),
+        thinkingBudget: resolveBudgetTokens(req),
       };
     }
   }
