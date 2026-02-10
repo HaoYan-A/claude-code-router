@@ -395,6 +395,23 @@ function validateImageResponse(label: string) {
 }
 
 const TEST_SCENARIOS: TestScenario[] = [
+  // Antigravity-Claude Opus 4.6
+  {
+    name: 'antigravity-opus-46',
+    description: 'Antigravity-Claude Opus 4.6 文字对话（SSE）',
+    apiKeyName: 'antigravity-claude',
+    buildRequest: () => ({
+      model: 'claude-opus-4-6',
+      max_tokens: 16000,
+      stream: true as const,
+      messages: [{ role: 'user' as const, content: 'Reply with exactly: "Hello from Opus 4.6!" and nothing else.' }],
+    }),
+    validate: (body) => {
+      validateTextResponse(body);
+      // 验证模型名包含 opus-4-6
+      assert(body.model.includes('opus-4-6'), `Expected model containing "opus-4-6", got "${body.model}"`);
+    },
+  },
   // Antigravity-Claude
   {
     name: 'antigravity-simple-chat',

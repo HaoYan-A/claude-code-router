@@ -4,6 +4,13 @@
   "currency": "USD",
   "unit": "per_million_tokens",
   "models": {
+    "claude-opus-4-6-thinking": {
+      "description": "Antigravity 平台 - Claude Opus 4.6",
+      "input": 5.00,
+      "output": 25.00,
+      "cacheRead": 0.50,
+      "cacheWrite": 6.25
+    },
     "claude-opus-4-5-thinking": {
       "description": "Antigravity 平台 - Claude Opus 4.5",
       "input": 5.00,

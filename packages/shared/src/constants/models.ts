@@ -6,6 +6,7 @@ export const PLATFORMS = {
     id: 'antigravity',
     name: 'Antigravity',
     models: [
+      { id: 'claude-opus-4-6-thinking', name: 'Claude Opus 4.6 Thinking' },
       { id: 'claude-opus-4-5-thinking', name: 'Claude Opus 4.5 Thinking' },
       { id: 'claude-sonnet-4-5-thinking', name: 'Claude Sonnet 4.5 Thinking' },
       { id: 'gemini-3-pro-high', name: 'Gemini 3 Pro' },
@@ -42,7 +43,7 @@ export const DEFAULT_MODEL_MAPPINGS: Record<
   ClaudeModelSlot,
   { platform: PlatformId; model: string }
 > = {
-  opus: { platform: 'antigravity', model: 'claude-opus-4-5-thinking' },
+  opus: { platform: 'antigravity', model: 'claude-opus-4-6-thinking' },
   sonnet: { platform: 'antigravity', model: 'claude-sonnet-4-5-thinking' },
   haiku: { platform: 'antigravity', model: 'gemini-3-flash' },
 };
