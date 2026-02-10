@@ -124,6 +124,19 @@ export function AccountCard({ account, selected, onClick }: AccountCardProps) {
           <Badge variant="outline" className="text-xs">
             优先级: {account.priority}
           </Badge>
+          {account.platform === 'antigravity' && (() => {
+            const raw = account.subscriptionRaw as Record<string, unknown> | null;
+            const projectId = raw?.projectId as string | undefined;
+            return projectId ? (
+              <Badge variant="outline" className="text-xs font-mono truncate max-w-32" title={projectId}>
+                {projectId.length > 12 ? `${projectId.slice(0, 12)}...` : projectId}
+              </Badge>
+            ) : (
+              <Badge variant="destructive" className="text-xs">
+                无 Project
+              </Badge>
+            );
+          })()}
           {account.errorMessage && (
             <Badge variant="destructive" className="text-xs truncate max-w-32">
               错误

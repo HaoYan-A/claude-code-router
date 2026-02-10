@@ -87,6 +87,14 @@ export function AccountDetailPanel({ account, onEdit, onDeleted }: AccountDetail
                 </p>
               </div>
             )}
+            {account.platform === 'antigravity' && (
+              <div>
+                <span className="text-muted-foreground">Project ID</span>
+                <p className="font-mono text-xs mt-1 break-all">
+                  {(subscriptionRaw?.projectId as string) || <span className="text-destructive">未设置</span>}
+                </p>
+              </div>
+            )}
             {!!subscriptionRaw?.subscriptionActiveStart && (
               <div>
                 <span className="text-muted-foreground">订阅开始</span>

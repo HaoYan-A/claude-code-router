@@ -465,13 +465,21 @@ export class AccountsService {
         await accountsRepository.upsertQuota(id, quota.model, quota.percentage, quota.resetTime);
       }
 
-      // 获取并更新订阅等级
+      // 获取并更新订阅等级和 projectId
       try {
         const subscription = await antigravityService.fetchProjectIdAndSubscription(currentAccessToken);
+        const updateData: Record<string, unknown> = {};
         if (subscription.tier) {
-          await accountsRepository.update(id, {
-            subscriptionTier: subscription.tier,
-          });
+          updateData.subscriptionTier = subscription.tier;
+        }
+        // 将 projectId 合并到 subscriptionRaw
+        const existingRaw = (refreshedAccount.subscriptionRaw as Record<string, unknown>) ?? {};
+        updateData.subscriptionRaw = {
+          ...existingRaw,
+          ...(subscription.projectId ? { projectId: subscription.projectId } : {}),
+        };
+        if (Object.keys(updateData).length > 0) {
+          await accountsRepository.update(id, updateData);
         }
       } catch (error) {
         logger.warn({ accountId: id, error }, 'Failed to update subscription tier');
