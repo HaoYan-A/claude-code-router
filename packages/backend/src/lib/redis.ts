@@ -30,8 +30,8 @@ export const cacheKeys = {
   account: (id: string) => `account:${id}`,
   accountQuota: (accountId: string) => `account:quota:${accountId}`,
   accountCooldown: (accountId: string) => `account:cooldown:${accountId}`,
-  // Codex session 粘性映射
-  codexSession: (hash: string) => `codex:session:${hash}`,
+  // Session affinity 粘性映射（全平台）
+  sessionAffinity: (key: string) => `session:affinity:${key}`,
   // 签名缓存
   toolSignature: (toolId: string) => `proxy:tool_sig:${toolId}`,
   sessionSignature: (sessionId: string) => `proxy:session_sig:${sessionId}`,

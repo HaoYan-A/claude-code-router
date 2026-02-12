@@ -1,8 +1,9 @@
 /**
- * Codex Session 粘性映射
+ * Session Affinity 粘性映射
  *
- * 使同一 conversation/session 的请求尽量路由到同一 Codex 账号，
+ * 使同一 conversation/session 的请求尽量路由到同一账号，
  * 以获得更好的缓存命中和上下文一致性。
+ * 支持所有平台（Antigravity、Kiro、Codex 等）。
  */
 
 import crypto from 'crypto';
@@ -12,6 +13,15 @@ import type { ClaudeRequest, ContentBlock } from './types.js';
 
 // Session 映射 TTL: 1 小时
 const SESSION_TTL_SECONDS = 3600;
+
+/**
+ * 构建带模型维度的 session key
+ *
+ * 不同模型的请求独立绑定，避免模型 A 的请求被路由到模型 B 的账号。
+ */
+export function buildSessionKey(sessionHash: string, targetModel: string): string {
+  return `${targetModel}:${sessionHash}`;
+}
 
 /**
  * 根据请求内容生成 session hash
@@ -64,11 +74,11 @@ export function generateSessionHash(req: ClaudeRequest): string | null {
 /**
  * 获取 session 绑定的账号 ID
  */
-export async function getSessionAccount(hash: string): Promise<string | null> {
+export async function getSessionAccount(sessionKey: string): Promise<string | null> {
   try {
-    return await redis.get(cacheKeys.codexSession(hash));
+    return await redis.get(cacheKeys.sessionAffinity(sessionKey));
   } catch (error) {
-    logger.warn({ hash, error }, 'Failed to get codex session mapping');
+    logger.warn({ sessionKey, error }, 'Failed to get session affinity mapping');
     return null;
   }
 }
@@ -76,22 +86,22 @@ export async function getSessionAccount(hash: string): Promise<string | null> {
 /**
  * 设置 session 到账号的绑定
  */
-export async function setSessionAccount(hash: string, accountId: string): Promise<void> {
+export async function setSessionAccount(sessionKey: string, accountId: string): Promise<void> {
   try {
-    await redis.setex(cacheKeys.codexSession(hash), SESSION_TTL_SECONDS, accountId);
+    await redis.setex(cacheKeys.sessionAffinity(sessionKey), SESSION_TTL_SECONDS, accountId);
   } catch (error) {
-    logger.warn({ hash, accountId, error }, 'Failed to set codex session mapping');
+    logger.warn({ sessionKey, accountId, error }, 'Failed to set session affinity mapping');
   }
 }
 
 /**
  * 删除 session 映射
  */
-export async function deleteSessionMapping(hash: string): Promise<void> {
+export async function deleteSessionMapping(sessionKey: string): Promise<void> {
   try {
-    await redis.del(cacheKeys.codexSession(hash));
+    await redis.del(cacheKeys.sessionAffinity(sessionKey));
   } catch (error) {
-    logger.warn({ hash, error }, 'Failed to delete codex session mapping');
+    logger.warn({ sessionKey, error }, 'Failed to delete session affinity mapping');
   }
 }
 

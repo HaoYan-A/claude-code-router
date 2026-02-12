@@ -21,10 +21,11 @@ import { AccountRoundRobin } from './account-round-robin.js';
 import { redis, cacheKeys } from '../../lib/redis.js';
 import {
   generateSessionHash,
+  buildSessionKey,
   getSessionAccount,
   setSessionAccount,
   deleteSessionMapping,
-} from './codex-session.js';
+} from './session-affinity.js';
 
 // Token 提前刷新时间 (60 秒)
 const TOKEN_REFRESH_BUFFER_MS = 60 * 1000;
@@ -355,9 +356,9 @@ export class AccountSelector {
   }
 
   /**
-   * 带 session 粘性的账号选择（Codex 专用）
+   * 带 session 粘性的账号选择（全平台）
    *
-   * 尝试让同一 session 的请求路由到同一 Codex 账号。
+   * 尝试让同一 session 的请求路由到同一账号，最大化 Prompt Caching 命中率。
    * 如果没有 session hash 或粘性账号不可用，fallback 到常规选择。
    */
   async selectAccountWithSession(
@@ -365,9 +366,10 @@ export class AccountSelector {
     claudeReq: ClaudeRequest
   ): Promise<SelectedAccount | null> {
     const sessionHash = generateSessionHash(claudeReq);
+    const sessionKey = sessionHash ? buildSessionKey(sessionHash, targetModel) : null;
 
-    if (sessionHash) {
-      const stickyAccountId = await getSessionAccount(sessionHash);
+    if (sessionKey) {
+      const stickyAccountId = await getSessionAccount(sessionKey);
 
       if (stickyAccountId) {
         // 验证该账号是否仍然可用
@@ -379,7 +381,7 @@ export class AccountSelector {
             const selected = await this.prepareAccount(stickyAccount);
             if (selected) {
               logger.debug(
-                { accountId: stickyAccountId, sessionHash },
+                { accountId: stickyAccountId, sessionKey, platform: selected.platform },
                 'Using sticky session account'
               );
               return selected;
@@ -393,16 +395,16 @@ export class AccountSelector {
         }
 
         // 粘性账号不可用，删除映射
-        await deleteSessionMapping(sessionHash);
+        await deleteSessionMapping(sessionKey);
       }
     }
 
     // Fallback 到常规选择
     const account = await this.selectAccountWithOptions(targetModel);
 
-    // 如果选到 codex 账号且有 sessionHash，写入映射
-    if (account && account.openaiAccountType === 'codex' && sessionHash) {
-      await setSessionAccount(sessionHash, account.id);
+    // 所有平台都写入 session 映射
+    if (account && sessionKey) {
+      await setSessionAccount(sessionKey, account.id);
     }
 
     return account;

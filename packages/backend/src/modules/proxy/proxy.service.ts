@@ -20,6 +20,7 @@ import { logBuffer } from '../log/log-buffer.js';
 import { apiKeyRepository } from '../api-key/api-key.repository.js';
 import { accountsRepository } from '../accounts/accounts.repository.js';
 import { accountSelector } from './account-selector.js';
+import { generateSessionHash, buildSessionKey, setSessionAccount } from './session-affinity.js';
 import { getProxyAgent } from '../../lib/proxy-agent.js';
 // Antigravity channel
 import {
@@ -325,6 +326,14 @@ export class ProxyService {
             res,
             retryCount > 0
           );
+        }
+        // 重试成功切换到新账号后，更新 session 映射
+        if (currentAccount.id !== initialAccount.id) {
+          const sessionHash = generateSessionHash(claudeReq);
+          if (sessionHash) {
+            const sessionKey = buildSessionKey(sessionHash, context.targetModel);
+            await setSessionAccount(sessionKey, currentAccount.id);
+          }
         }
         return; // 成功则返回
       } catch (error) {
