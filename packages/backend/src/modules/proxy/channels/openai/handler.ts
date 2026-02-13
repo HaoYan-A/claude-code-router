@@ -10,6 +10,8 @@ import { logger } from '../../../../lib/logger.js';
 export interface OpenAIStreamingOptions {
   sessionId: string;
   modelName: string;
+  /** shortened→original 工具名反向映射，用于恢复原始名称 */
+  toolNameReverseMap?: Map<string, string>;
 }
 
 export interface OpenAISSEStreamResult {
@@ -43,6 +45,8 @@ interface StreamState {
   hasFunctionCall: boolean;
   responseStatus: string;
   hasIncompleteDetails: boolean;
+  // 工具名反向映射: shortened → original
+  toolNameReverseMap: Map<string, string>;
 }
 
 /**
@@ -68,6 +72,7 @@ export async function handleOpenAISSEStream(
     hasFunctionCall: false,
     responseStatus: '',
     hasIncompleteDetails: false,
+    toolNameReverseMap: options.toolNameReverseMap ?? new Map(),
   };
 
   // 设置 SSE headers
@@ -305,23 +310,26 @@ function handleOutputItemAdded(
     closeOpenBlocks(state, safeWrite);
 
     const callId = (item.call_id as string) || '';
-    const name = (item.name as string) || '';
+    const shortenedName = (item.name as string) || '';
     const itemId = (item.id as string) || '';
+
+    // 使用反向映射恢复原始工具名
+    const originalName = state.toolNameReverseMap.get(shortenedName) ?? shortenedName;
 
     state.hasFunctionCall = true;
 
-    // 记录 function call
+    // 记录 function call（使用原始名称）
     const blockIndex = state.contentIndex++;
-    state.functionCalls.set(itemId, { name, callId, contentBlockIndex: blockIndex });
+    state.functionCalls.set(itemId, { name: originalName, callId, contentBlockIndex: blockIndex });
 
-    // 发送 content_block_start (tool_use)
+    // 发送 content_block_start (tool_use)（使用原始名称）
     safeWrite('content_block_start', {
       type: 'content_block_start',
       index: blockIndex,
       content_block: {
         type: 'tool_use',
         id: callId,
-        name,
+        name: originalName,
         input: {},
       },
     });

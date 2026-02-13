@@ -20,6 +20,7 @@ import type {
   OpenAIFunctionCallItem,
   OpenAIFunctionCallOutputItem,
   OpenAITool,
+  OpenAIWebSearchTool,
   OpenAIToolChoice,
   OpenAIReasoning,
   OpenAIContentPart,
@@ -31,6 +32,8 @@ export interface OpenAIConvertOptions {
 
 export interface OpenAIConvertResult {
   body: OpenAIResponsesRequest;
+  /** original→shortened 工具名映射，用于响应中恢复原始名称 */
+  toolNameMap: Map<string, string>;
 }
 
 /**
@@ -40,9 +43,11 @@ export function convertClaudeToOpenAI(
   claudeReq: ClaudeRequest,
   options: OpenAIConvertOptions
 ): OpenAIConvertResult {
+  let toolNameMap = new Map<string, string>();
+
   const body: OpenAIResponsesRequest = {
     model: options.targetModel,
-    input: convertMessages(claudeReq.messages),
+    input: [], // 先占位，下面设置 toolNameMap 后再转换 messages
     stream: claudeReq.stream ?? true,
   };
 
@@ -52,13 +57,23 @@ export function convertClaudeToOpenAI(
     body.instructions = instructions;
   }
 
-  // Tools
+  // Tools（含工具名缩短 + web search 映射）
   if (claudeReq.tools && claudeReq.tools.length > 0) {
-    body.tools = convertTools(claudeReq.tools);
+    const toolsResult = convertTools(claudeReq.tools);
+    body.tools = toolsResult.tools;
+    toolNameMap = toolsResult.nameMap;
+
+    // 有 function 类型工具时启用并行工具调用
+    if (toolsResult.tools.some((t) => t.type === 'function')) {
+      body.parallel_tool_calls = true;
+    }
   }
 
+  // 转换消息（需要 toolNameMap 来缩短历史消息中的工具名）
+  body.input = convertMessages(claudeReq.messages, toolNameMap);
+
   // Tool choice (从 claudeReq 中提取，如果存在的话)
-  const toolChoice = convertToolChoice(claudeReq);
+  const toolChoice = convertToolChoice(claudeReq, toolNameMap);
   if (toolChoice !== undefined) {
     body.tool_choice = toolChoice;
   }
@@ -77,9 +92,11 @@ export function convertClaudeToOpenAI(
   const reasoning = convertThinking(claudeReq);
   if (reasoning) {
     body.reasoning = reasoning;
+    // Codex 需要 include 参数来获取推理内容
+    body.include = ['reasoning.encrypted_content'];
   }
 
-  return { body };
+  return { body, toolNameMap };
 }
 
 /**
@@ -98,7 +115,7 @@ function convertSystemPrompt(system?: SystemPrompt): string | undefined {
 /**
  * 转换消息列表
  */
-function convertMessages(messages: Message[]): OpenAIInputItem[] {
+function convertMessages(messages: Message[], toolNameMap: Map<string, string>): OpenAIInputItem[] {
   const items: OpenAIInputItem[] = [];
 
   for (const msg of messages) {
@@ -114,7 +131,7 @@ function convertMessages(messages: Message[]): OpenAIInputItem[] {
     if (msg.role === 'user') {
       convertUserMessage(msg.content as ContentBlock[], items);
     } else if (msg.role === 'assistant') {
-      convertAssistantMessage(msg.content as ContentBlock[], items);
+      convertAssistantMessage(msg.content as ContentBlock[], items, toolNameMap);
     }
   }
 
@@ -179,7 +196,11 @@ function convertUserMessage(blocks: ContentBlock[], items: OpenAIInputItem[]): v
 /**
  * 转换 assistant 消息
  */
-function convertAssistantMessage(blocks: ContentBlock[], items: OpenAIInputItem[]): void {
+function convertAssistantMessage(
+  blocks: ContentBlock[],
+  items: OpenAIInputItem[],
+  toolNameMap: Map<string, string>
+): void {
   const textParts: string[] = [];
   const functionCalls: OpenAIFunctionCallItem[] = [];
 
@@ -189,17 +210,20 @@ function convertAssistantMessage(blocks: ContentBlock[], items: OpenAIInputItem[
         textParts.push(block.text);
         break;
 
-      case 'tool_use':
+      case 'tool_use': {
+        // 使用 toolNameMap 缩短历史消息中的工具名
+        const shortenedName = toolNameMap.get(block.name) ?? block.name;
         functionCalls.push({
           type: 'function_call',
           id: `fc_${block.id}`,
           call_id: block.id,
-          name: block.name,
+          name: shortenedName,
           arguments: typeof block.input === 'string'
             ? block.input
             : JSON.stringify(block.input ?? {}),
         });
         break;
+      }
 
       // 忽略 thinking, redacted_thinking, signature 等
       default:
@@ -245,24 +269,108 @@ function extractToolResultContent(content: unknown): string {
   return JSON.stringify(content);
 }
 
+// ==================== 工具名缩短 ====================
+
+const TOOL_NAME_MAX_LENGTH = 64;
+
 /**
- * 转换工具定义
+ * 缩短单个工具名以满足 64 字符限制
+ * - 如果 ≤ 64 字符，原样返回
+ * - 如果以 "mcp__" 开头，取最后一个 "__" 后的部分拼接 "mcp__" 前缀
+ * - 否则截断到 64 字符
  */
-function convertTools(tools: Tool[]): OpenAITool[] {
-  return tools
-    .filter((tool) => tool.name) // 过滤掉没有 name 的工具（如 server tools）
-    .map((tool) => ({
+export function shortenToolName(name: string): string {
+  if (name.length <= TOOL_NAME_MAX_LENGTH) return name;
+
+  if (name.startsWith('mcp__')) {
+    const lastSep = name.lastIndexOf('__');
+    if (lastSep > 4) { // 确保不是开头的 "mcp__"
+      const suffix = name.substring(lastSep + 2);
+      const shortened = `mcp__${suffix}`;
+      if (shortened.length <= TOOL_NAME_MAX_LENGTH) return shortened;
+    }
+  }
+
+  return name.substring(0, TOOL_NAME_MAX_LENGTH);
+}
+
+/**
+ * 构建工具名映射表: original → shortened
+ * 对所有工具名应用缩短，检测冲突时追加 _1, _2 后缀
+ */
+export function buildToolNameMap(names: string[]): Map<string, string> {
+  const nameMap = new Map<string, string>();
+  // 反向索引：shortened → original（用于检测冲突）
+  const usedShortNames = new Map<string, string>();
+
+  for (const original of names) {
+    let shortened = shortenToolName(original);
+
+    // 检测冲突：缩短后的名称已被另一个原始名使用
+    const existing = usedShortNames.get(shortened);
+    if (existing && existing !== original) {
+      // 追加后缀解决冲突
+      let counter = 1;
+      let candidate = `${shortened.substring(0, TOOL_NAME_MAX_LENGTH - 2)}_${counter}`;
+      while (usedShortNames.has(candidate)) {
+        counter++;
+        const suffixStr = `_${counter}`;
+        candidate = `${shortened.substring(0, TOOL_NAME_MAX_LENGTH - suffixStr.length)}${suffixStr}`;
+      }
+      shortened = candidate;
+    }
+
+    nameMap.set(original, shortened);
+    usedShortNames.set(shortened, original);
+  }
+
+  return nameMap;
+}
+
+/**
+ * 转换工具定义（含工具名缩短 + web search 映射）
+ */
+function convertTools(tools: Tool[]): {
+  tools: (OpenAITool | OpenAIWebSearchTool)[];
+  nameMap: Map<string, string>;
+} {
+  const result: (OpenAITool | OpenAIWebSearchTool)[] = [];
+
+  // 收集所有 function 类型工具名用于构建映射表
+  const functionToolNames = tools
+    .filter((tool) => tool.name && tool.type !== 'web_search_20250305')
+    .map((tool) => tool.name!);
+
+  const nameMap = buildToolNameMap(functionToolNames);
+
+  for (const tool of tools) {
+    // Web search 工具映射: web_search_20250305 → web_search
+    if (tool.type === 'web_search_20250305') {
+      result.push({ type: 'web_search' });
+      continue;
+    }
+
+    // 过滤掉没有 name 的工具（如 server tools）
+    if (!tool.name) continue;
+
+    result.push({
       type: 'function' as const,
-      name: tool.name!,
+      name: nameMap.get(tool.name) ?? tool.name,
       description: tool.description,
       parameters: tool.input_schema,
-    }));
+    });
+  }
+
+  return { tools: result, nameMap };
 }
 
 /**
  * 转换 tool_choice
  */
-function convertToolChoice(claudeReq: ClaudeRequest): OpenAIToolChoice | undefined {
+function convertToolChoice(
+  claudeReq: ClaudeRequest,
+  toolNameMap: Map<string, string>
+): OpenAIToolChoice | undefined {
   // Claude 的 tool_choice 不在标准类型定义中，需要从原始请求提取
   const toolChoice = (claudeReq as unknown as Record<string, unknown>).tool_choice as
     | { type: string; name?: string }
@@ -279,7 +387,9 @@ function convertToolChoice(claudeReq: ClaudeRequest): OpenAIToolChoice | undefin
       return 'none';
     case 'tool':
       if (toolChoice.name) {
-        return { type: 'function', name: toolChoice.name };
+        // 使用缩短后的工具名
+        const shortened = toolNameMap.get(toolChoice.name) ?? toolChoice.name;
+        return { type: 'function', name: shortened };
       }
       return 'auto';
     default:

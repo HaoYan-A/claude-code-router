@@ -816,7 +816,7 @@ export class ProxyService {
     const isCodex = account.openaiAccountType === 'codex';
 
     // 转换请求
-    const { body: openaiBody } = convertClaudeToOpenAI(claudeReq, {
+    const { body: openaiBody, toolNameMap } = convertClaudeToOpenAI(claudeReq, {
       targetModel: context.targetModel,
     });
 
@@ -925,12 +925,21 @@ export class ProxyService {
     if (isStream && response.body) {
       res.setHeader('X-Request-Id', context.logId);
 
+      // 构建反向映射: shortened → original
+      const toolNameReverseMap = new Map<string, string>();
+      for (const [original, shortened] of toolNameMap) {
+        if (original !== shortened) {
+          toolNameReverseMap.set(shortened, original);
+        }
+      }
+
       const result = await handleOpenAISSEStream(
         response.body,
         res,
         {
           sessionId: context.sessionId,
           modelName: context.targetModel,
+          toolNameReverseMap,
         }
       );
 

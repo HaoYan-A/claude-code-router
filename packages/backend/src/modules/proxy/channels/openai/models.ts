@@ -10,11 +10,13 @@ export interface OpenAIResponsesRequest {
   instructions?: string;
   stream?: boolean;
   store?: boolean;
-  tools?: OpenAITool[];
+  tools?: (OpenAITool | OpenAIWebSearchTool)[];
   tool_choice?: OpenAIToolChoice;
   max_output_tokens?: number;
   temperature?: number;
   reasoning?: OpenAIReasoning;
+  parallel_tool_calls?: boolean;
+  include?: string[];
 }
 
 export type OpenAIInputItem =
@@ -51,6 +53,10 @@ export interface OpenAITool {
   description?: string;
   parameters?: unknown;
   strict?: boolean;
+}
+
+export interface OpenAIWebSearchTool {
+  type: 'web_search';
 }
 
 export type OpenAIToolChoice =
