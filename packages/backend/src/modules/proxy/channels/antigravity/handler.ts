@@ -869,6 +869,9 @@ export interface SSEStreamResult {
   clientResponseBody: string;
 }
 
+// Keep-Alive 心跳间隔（15 秒）
+const KEEP_ALIVE_INTERVAL_MS = 15_000;
+
 /**
  * 处理 SSE 流并转发给客户端
  */
@@ -901,10 +904,28 @@ export async function handleSSEStream(
   res.setHeader('Cache-Control', 'no-cache');
   res.setHeader('Connection', 'keep-alive');
 
+  // 设置 keep-alive 心跳定时器
+  let keepAliveTimer: ReturnType<typeof setTimeout> | null = null;
+  const resetKeepAlive = () => {
+    if (keepAliveTimer) clearTimeout(keepAliveTimer);
+    keepAliveTimer = setTimeout(function sendKeepAlive() {
+      try {
+        res.write(': keep-alive\n\n');
+      } catch {
+        // 连接已关闭，忽略
+      }
+      keepAliveTimer = setTimeout(sendKeepAlive, KEEP_ALIVE_INTERVAL_MS);
+    }, KEEP_ALIVE_INTERVAL_MS);
+  };
+
+  resetKeepAlive();
+
   try {
     while (true) {
       const { done, value } = await reader.read();
       if (done) break;
+
+      resetKeepAlive(); // 收到数据时重置计时器
 
       buffer += decoder.decode(value, { stream: true });
 
@@ -979,6 +1000,7 @@ export async function handleSSEStream(
       clientChunks.push(chunk);
     }
   } finally {
+    if (keepAliveTimer) clearTimeout(keepAliveTimer);
     reader.releaseLock();
     res.end();
   }

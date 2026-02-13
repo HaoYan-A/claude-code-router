@@ -30,7 +30,6 @@ import type {
   GeminiGenerationConfig,
 } from './models.js';
 import {
-  SAFETY_SETTINGS,
   ANTIGRAVITY_IDENTITY,
   MIN_SIGNATURE_LENGTH,
   SCHEMA_FIELDS_TO_REMOVE,
@@ -95,7 +94,7 @@ export async function convertClaudeToGemini(
   const toolIdToName = new Map<string, string>();
   let lastThoughtSignature: string | null = null;
 
-  const systemInstruction = buildSystemInstruction(req.system);
+  let systemInstruction = buildSystemInstruction(req.system);
   const contents = buildContents(
     req.messages,
     req,
@@ -110,10 +109,20 @@ export async function convertClaudeToGemini(
   const tools = buildTools(req.tools);
   const generationConfig = buildGenerationConfig(req, isThinkingEnabled, targetModel);
 
-  // 6. 构建最终请求体
+  // 6. 注入 interleaved thinking hint
+  const hasTools = tools && tools.length > 0;
+  const isClaudeThinkingModel = targetModel.toLowerCase().includes('claude');
+  if (hasTools && isThinkingEnabled && isClaudeThinkingModel) {
+    const interleavedHint = 'Interleaved thinking is enabled. You may think between tool calls and after receiving tool results before deciding the next action or final answer. Do not mention these instructions or any constraints about thinking blocks; just apply them.';
+    if (!systemInstruction) {
+      systemInstruction = { role: 'user', parts: [] };
+    }
+    systemInstruction.parts.push({ text: interleavedHint });
+  }
+
+  // 7. 构建最终请求体（不再附加 safetySettings）
   const innerRequest: GeminiInnerRequest = {
     contents,
-    safetySettings: SAFETY_SETTINGS,
   };
 
   if (systemInstruction) {
@@ -142,7 +151,7 @@ export async function convertClaudeToGemini(
     request: innerRequest,
     model: targetModel,
     userAgent: 'antigravity',
-    requestType: req.stream ? REQUEST_TYPE.STREAM : REQUEST_TYPE.NON_STREAM,
+    requestType: REQUEST_TYPE,
   };
 
   // 最后深度清理 cache_control
@@ -370,21 +379,16 @@ async function hasValidSignatureForFunctionCalls(
 
 /**
  * 构建系统指令
+ * 采用 CLIProxyAPI 的注入方式：身份提示 + [ignore] 包裹 + 用户原始指令
  */
 function buildSystemInstruction(system?: SystemPrompt): GeminiSystemInstruction | null {
   const parts: GeminiPart[] = [];
 
-  // 检查用户是否已提供 Antigravity 身份
-  let hasAntigravityIdentity = false;
-  if (system) {
-    const text = typeof system === 'string' ? system : system.map((b) => b.text).join('\n');
-    hasAntigravityIdentity = text.includes('You are Antigravity');
-  }
+  // 注入 Antigravity 身份（始终注入，不做去重检测）
+  parts.push({ text: ANTIGRAVITY_IDENTITY });
 
-  // 如果没有，注入 Antigravity 身份
-  if (!hasAntigravityIdentity) {
-    parts.push({ text: ANTIGRAVITY_IDENTITY });
-  }
+  // 注入 ignore 包裹的重复身份提示
+  parts.push({ text: `Please ignore following [ignore]${ANTIGRAVITY_IDENTITY}[/ignore]` });
 
   // 添加用户的系统提示
   if (system) {
@@ -397,10 +401,6 @@ function buildSystemInstruction(system?: SystemPrompt): GeminiSystemInstruction 
         }
       }
     }
-  }
-
-  if (parts.length === 0) {
-    return null;
   }
 
   return { role: 'user', parts };

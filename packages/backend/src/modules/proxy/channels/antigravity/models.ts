@@ -177,11 +177,8 @@ You are pair programming with a USER to solve their coding task. The task may re
 // 最小有效签名长度
 export const MIN_SIGNATURE_LENGTH = 50;
 
-// 请求类型常量
-export const REQUEST_TYPE = {
-  STREAM: 'STREAM_GENERATE_CONTENT',
-  NON_STREAM: 'GENERATE_CONTENT',
-} as const;
+// 请求类型常量（固定使用 agent）
+export const REQUEST_TYPE = 'agent';
 
 // 工具参数需要清理的 JSON Schema 字段 (Gemini 不支持)
 export const SCHEMA_FIELDS_TO_REMOVE = [

@@ -60,8 +60,10 @@ const MAX_RETRIES = 2;
 // User-Agent (版本号需要 >= 1.15.8)
 const USER_AGENT = 'antigravity/1.15.8 darwin/arm64';
 
-// Anthropic Beta 功能
-const ANTHROPIC_BETA = 'interleaved-thinking-2025-01-24,claude-code-2025-01-24';
+// Antigravity 端点容量不足重试配置
+const ANTIGRAVITY_MAX_CAPACITY_RETRIES = 3;
+const ANTIGRAVITY_CAPACITY_RETRY_BASE_MS = 250;
+const ANTIGRAVITY_CAPACITY_RETRY_MAX_MS = 2000;
 
 export interface ProxyRequestOptions {
   method: string;
@@ -382,6 +384,7 @@ export class ProxyService {
 
   /**
    * 执行 Antigravity 平台代理请求
+   * 支持多端点降级（429 切换端点）和容量不足重试（503 "no capacity" 指数退避）
    */
   private async executeAntigravityProxy(
     claudeReq: ClaudeRequest,
@@ -402,179 +405,212 @@ export class ProxyService {
       }
     );
 
-    // 构建 URL
-    const endpoint = ANTIGRAVITY_ENDPOINTS[0];
     const path = isStream ? STREAM_PATH : NON_STREAM_PATH;
-    const url = `${endpoint}${path}`;
-
-    // 构建上游请求头
-    const upstreamHeaders: Record<string, string> = {
-      Host: 'daily-cloudcode-pa.sandbox.googleapis.com',
-      'X-App': 'cli',
-      'User-Agent': USER_AGENT,
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${context.accessToken}`,
-      'Anthropic-Beta': ANTHROPIC_BETA,
-      'X-Stainless-Lang': 'python',
-      'X-Stainless-Runtime': 'CPython',
-      'X-Stainless-Package-Version': '0.43.0',
-      'X-Stainless-Runtime-Version': '3.11.0',
-    };
-
-    const upstreamRequestHeadersStr = JSON.stringify(upstreamHeaders);
     const upstreamRequestBodyStr = JSON.stringify(geminiBody);
-
-    // 更新日志记录
-    logRepository.update(context.logId, {
-      upstreamRequestHeaders: upstreamRequestHeadersStr,
-      upstreamRequestBody: upstreamRequestBodyStr,
-    }).catch((err) => logger.error({ err, logId: context.logId }, 'Failed to update upstream request data'));
-
-    logger.debug(
-      {
-        url,
-        platform: 'antigravity',
-        targetModel: context.targetModel,
-        isStream,
-        isThinkingEnabled,
-        messageCount,
-      },
-      'Sending request to Antigravity'
-    );
-
-    // 发送请求
     const proxyAgent = getProxyAgent();
-    const fetchOptions: RequestInit & { dispatcher?: unknown } = {
-      method: 'POST',
-      headers: upstreamHeaders,
-      body: upstreamRequestBodyStr,
-    };
-    if (proxyAgent) {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      fetchOptions.dispatcher = proxyAgent as any;
-    }
-    const response = await fetch(url, fetchOptions);
 
-    // 收集上游响应头
-    const upstreamResponseHeaders: Record<string, string> = {};
-    response.headers.forEach((value, key) => {
-      upstreamResponseHeaders[key] = value;
-    });
+    // 端点降级 + 容量不足重试
+    attemptLoop:
+    for (let attempt = 0; attempt < ANTIGRAVITY_MAX_CAPACITY_RETRIES; attempt++) {
+      for (let epIdx = 0; epIdx < ANTIGRAVITY_ENDPOINTS.length; epIdx++) {
+        const endpoint = ANTIGRAVITY_ENDPOINTS[epIdx];
+        const url = `${endpoint}${path}`;
 
-    // 处理错误响应
-    if (!response.ok) {
-      const errorBody = await response.text();
-      logger.error(
-        {
-          statusCode: response.status,
-          errorBody,
-          accountId: context.accountId,
-          url,
-          targetModel: context.targetModel,
-        },
-        'Antigravity API error'
-      );
+        // 构建上游请求头（Host 动态解析）
+        const upstreamHeaders: Record<string, string> = {
+          Host: new URL(endpoint).hostname,
+          'User-Agent': USER_AGENT,
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${context.accessToken}`,
+          Accept: isStream ? 'text/event-stream' : 'application/json',
+        };
 
-      throw new ProxyError(
-        response.status,
-        'UPSTREAM_ERROR',
-        `Antigravity API error: ${response.status} - ${errorBody.substring(0, 200)}`
-      );
-    }
+        const upstreamRequestHeadersStr = JSON.stringify(upstreamHeaders);
 
-    // 处理响应
-    const durationMs = Date.now() - context.startTime;
-
-    if (isStream && response.body) {
-      res.setHeader('X-Request-Id', context.logId);
-
-      const result = await handleSSEStream(
-        response.body,
-        res,
-        {
-          sessionId: context.sessionId,
-          modelName: context.targetModel,
-          messageCount,
-          scalingEnabled: false,
-          contextLimit: 1_048_576,
+        // 首次尝试时更新日志记录
+        if (attempt === 0 && epIdx === 0) {
+          logRepository.update(context.logId, {
+            upstreamRequestHeaders: upstreamRequestHeadersStr,
+            upstreamRequestBody: upstreamRequestBodyStr,
+          }).catch((err) => logger.error({ err, logId: context.logId }, 'Failed to update upstream request data'));
         }
-      );
 
-      logBuffer.add({
-        id: context.logId,
-        status: 'success',
-        statusCode: 200,
-        inputTokens: result.inputTokens,
-        outputTokens: result.outputTokens,
-        durationMs,
-        targetModel: context.targetModel,
-        platform: context.platform,
-        accountId: context.accountId,
-        upstreamResponseHeaders: JSON.stringify(upstreamResponseHeaders),
-        upstreamResponseBody: result.upstreamResponseBody,
-        clientResponseHeaders: JSON.stringify({ 'Content-Type': 'text/event-stream' }),
-        responseBody: result.clientResponseBody,
-        cacheReadTokens: result.cacheReadTokens,
-        cacheCreationTokens: 0,
-        rawInputTokens: result.rawInputTokens,
-        rawOutputTokens: result.rawOutputTokens,
-        rawCacheTokens: result.rawCacheTokens,
-        apiKeyId: context.apiKeyId,
-      });
+        logger.debug(
+          {
+            url,
+            platform: 'antigravity',
+            targetModel: context.targetModel,
+            isStream,
+            isThinkingEnabled,
+            messageCount,
+            attempt,
+            endpointIndex: epIdx,
+          },
+          'Sending request to Antigravity'
+        );
 
-      accountSelector.updateUsageStats(
-        context.accountId,
-        result.inputTokens,
-        result.outputTokens,
-        result.cacheReadTokens || 0
-      ).catch((err) => logger.error({ err, accountId: context.accountId }, 'Failed to update account stats'));
-    } else {
-      const geminiResponseText = await response.text();
-      const geminiResponse = JSON.parse(geminiResponseText);
-      const claudeResponse = await transformNonStreamingResponse(geminiResponse, {
-        sessionId: context.sessionId,
-        modelName: context.targetModel,
-        messageCount,
-        scalingEnabled: false,
-        contextLimit: 1_048_576,
-      });
+        // 发送请求
+        const fetchOptions: RequestInit & { dispatcher?: unknown } = {
+          method: 'POST',
+          headers: upstreamHeaders,
+          body: upstreamRequestBodyStr,
+        };
+        if (proxyAgent) {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          fetchOptions.dispatcher = proxyAgent as any;
+        }
+        const response = await fetch(url, fetchOptions);
 
-      res.setHeader('X-Request-Id', context.logId);
-      res.json(claudeResponse);
+        // 收集上游响应头
+        const upstreamResponseHeaders: Record<string, string> = {};
+        response.headers.forEach((value, key) => {
+          upstreamResponseHeaders[key] = value;
+        });
 
-      const rawUsage = geminiResponse.usageMetadata || {};
-      const rawInputTokens = rawUsage.promptTokenCount || 0;
-      const rawOutputTokens = rawUsage.candidatesTokenCount || 0;
-      const rawCacheTokens = rawUsage.cachedContentTokenCount || 0;
+        // 处理错误响应
+        if (!response.ok) {
+          const errorBody = await response.text();
 
-      logBuffer.add({
-        id: context.logId,
-        status: 'success',
-        statusCode: 200,
-        responseBody: JSON.stringify(claudeResponse),
-        inputTokens: claudeResponse.usage.input_tokens,
-        outputTokens: claudeResponse.usage.output_tokens,
-        durationMs,
-        targetModel: context.targetModel,
-        platform: context.platform,
-        accountId: context.accountId,
-        upstreamResponseHeaders: JSON.stringify(upstreamResponseHeaders),
-        upstreamResponseBody: geminiResponseText,
-        clientResponseHeaders: JSON.stringify({ 'Content-Type': 'application/json' }),
-        cacheReadTokens: claudeResponse.usage.cache_read_input_tokens || 0,
-        cacheCreationTokens: 0,
-        rawInputTokens,
-        rawOutputTokens,
-        rawCacheTokens,
-        apiKeyId: context.apiKeyId,
-      });
+          // 429：尝试下一个 endpoint
+          if (response.status === 429 && epIdx < ANTIGRAVITY_ENDPOINTS.length - 1) {
+            logger.warn(
+              { statusCode: 429, endpoint, attempt, nextEndpoint: ANTIGRAVITY_ENDPOINTS[epIdx + 1] },
+              'Antigravity 429, trying next endpoint'
+            );
+            continue;
+          }
 
-      accountSelector.updateUsageStats(
-        context.accountId,
-        claudeResponse.usage.input_tokens,
-        claudeResponse.usage.output_tokens,
-        claudeResponse.usage.cache_read_input_tokens || 0
-      ).catch((err) => logger.error({ err, accountId: context.accountId }, 'Failed to update account stats'));
+          // 503 + "no capacity"：延迟后从第一个端点重试
+          if (response.status === 503 && errorBody.toLowerCase().includes('no capacity')) {
+            if (attempt < ANTIGRAVITY_MAX_CAPACITY_RETRIES - 1) {
+              const delay = Math.min(
+                (attempt + 1) * ANTIGRAVITY_CAPACITY_RETRY_BASE_MS,
+                ANTIGRAVITY_CAPACITY_RETRY_MAX_MS
+              );
+              logger.warn(
+                { statusCode: 503, attempt, delayMs: delay },
+                'Antigravity no capacity, retrying after delay'
+              );
+              await new Promise(r => setTimeout(r, delay));
+              continue attemptLoop;
+            }
+          }
+
+          logger.error(
+            {
+              statusCode: response.status,
+              errorBody,
+              accountId: context.accountId,
+              url,
+              targetModel: context.targetModel,
+            },
+            'Antigravity API error'
+          );
+
+          throw new ProxyError(
+            response.status,
+            'UPSTREAM_ERROR',
+            `Antigravity API error: ${response.status} - ${errorBody.substring(0, 200)}`
+          );
+        }
+
+        // 成功响应 — 处理并返回
+        const durationMs = Date.now() - context.startTime;
+
+        if (isStream && response.body) {
+          res.setHeader('X-Request-Id', context.logId);
+
+          const result = await handleSSEStream(
+            response.body,
+            res,
+            {
+              sessionId: context.sessionId,
+              modelName: context.targetModel,
+              messageCount,
+              scalingEnabled: false,
+              contextLimit: 1_048_576,
+            }
+          );
+
+          logBuffer.add({
+            id: context.logId,
+            status: 'success',
+            statusCode: 200,
+            inputTokens: result.inputTokens,
+            outputTokens: result.outputTokens,
+            durationMs,
+            targetModel: context.targetModel,
+            platform: context.platform,
+            accountId: context.accountId,
+            upstreamResponseHeaders: JSON.stringify(upstreamResponseHeaders),
+            upstreamResponseBody: result.upstreamResponseBody,
+            clientResponseHeaders: JSON.stringify({ 'Content-Type': 'text/event-stream' }),
+            responseBody: result.clientResponseBody,
+            cacheReadTokens: result.cacheReadTokens,
+            cacheCreationTokens: 0,
+            rawInputTokens: result.rawInputTokens,
+            rawOutputTokens: result.rawOutputTokens,
+            rawCacheTokens: result.rawCacheTokens,
+            apiKeyId: context.apiKeyId,
+          });
+
+          accountSelector.updateUsageStats(
+            context.accountId,
+            result.inputTokens,
+            result.outputTokens,
+            result.cacheReadTokens || 0
+          ).catch((err) => logger.error({ err, accountId: context.accountId }, 'Failed to update account stats'));
+        } else {
+          const geminiResponseText = await response.text();
+          const geminiResponse = JSON.parse(geminiResponseText);
+          const claudeResponse = await transformNonStreamingResponse(geminiResponse, {
+            sessionId: context.sessionId,
+            modelName: context.targetModel,
+            messageCount,
+            scalingEnabled: false,
+            contextLimit: 1_048_576,
+          });
+
+          res.setHeader('X-Request-Id', context.logId);
+          res.json(claudeResponse);
+
+          const rawUsage = geminiResponse.usageMetadata || {};
+          const rawInputTokens = rawUsage.promptTokenCount || 0;
+          const rawOutputTokens = rawUsage.candidatesTokenCount || 0;
+          const rawCacheTokens = rawUsage.cachedContentTokenCount || 0;
+
+          logBuffer.add({
+            id: context.logId,
+            status: 'success',
+            statusCode: 200,
+            responseBody: JSON.stringify(claudeResponse),
+            inputTokens: claudeResponse.usage.input_tokens,
+            outputTokens: claudeResponse.usage.output_tokens,
+            durationMs,
+            targetModel: context.targetModel,
+            platform: context.platform,
+            accountId: context.accountId,
+            upstreamResponseHeaders: JSON.stringify(upstreamResponseHeaders),
+            upstreamResponseBody: geminiResponseText,
+            clientResponseHeaders: JSON.stringify({ 'Content-Type': 'application/json' }),
+            cacheReadTokens: claudeResponse.usage.cache_read_input_tokens || 0,
+            cacheCreationTokens: 0,
+            rawInputTokens,
+            rawOutputTokens,
+            rawCacheTokens,
+            apiKeyId: context.apiKeyId,
+          });
+
+          accountSelector.updateUsageStats(
+            context.accountId,
+            claudeResponse.usage.input_tokens,
+            claudeResponse.usage.output_tokens,
+            claudeResponse.usage.cache_read_input_tokens || 0
+          ).catch((err) => logger.error({ err, accountId: context.accountId }, 'Failed to update account stats'));
+        }
+
+        return; // 成功处理完毕
+      }
     }
   }
 
