@@ -240,19 +240,23 @@ export class ProxyService {
 
       if (error instanceof ProxyError) {
         logger.error(
-          { error, code: error.code, logId: log.id },
+          { error, code: error.code, logId: log.id, headersSent: res.headersSent },
           'Proxy request failed'
         );
 
-        // 先返回错误响应（包含请求 ID 头）
-        res.setHeader('X-Request-Id', log.id);
-        res.status(error.statusCode).json({
-          success: false,
-          error: {
-            code: error.code,
-            message: error.message,
-          },
-        });
+        // 返回错误响应（包含请求 ID 头）
+        if (!res.headersSent) {
+          res.setHeader('X-Request-Id', log.id);
+          res.status(error.statusCode).json({
+            success: false,
+            error: {
+              code: error.code,
+              message: error.message,
+            },
+          });
+        } else {
+          logger.warn({ logId: log.id, code: error.code }, 'Cannot send ProxyError response, headers already sent (streaming)');
+        }
 
         // 添加到日志缓冲区（批量写入）
         logBuffer.add({
@@ -265,24 +269,51 @@ export class ProxyService {
           accountId: error.accountId,
         });
       } else {
-        logger.error({ error, logId: log.id }, 'Unexpected proxy error');
+        const errMsg = error instanceof Error ? error.message : String(error);
+        const errStack = error instanceof Error ? error.stack : undefined;
+        const errName = error instanceof Error ? error.name : typeof error;
 
-        // 先返回错误响应（包含请求 ID 头）
-        res.setHeader('X-Request-Id', log.id);
-        res.status(500).json({
-          success: false,
-          error: {
-            code: 'PROXY_ERROR',
-            message: 'Failed to proxy request',
+        logger.error(
+          {
+            logId: log.id,
+            errorName: errName,
+            errorMessage: errMsg,
+            errorStack: errStack,
+            targetModel: resolvedTargetModel,
+            accountId: resolvedAccountId,
+            headersSent: res.headersSent,
+            durationMs,
           },
-        });
+          'Unexpected proxy error (non-ProxyError)'
+        );
 
-        // 添加到日志缓冲区（批量写入）
+        // 如果响应头已发送（流式传输中途出错），无法再发送 JSON 错误响应
+        if (!res.headersSent) {
+          res.setHeader('X-Request-Id', log.id);
+          res.status(500).json({
+            success: false,
+            error: {
+              code: 'PROXY_ERROR',
+              message: 'Failed to proxy request',
+            },
+          });
+        } else {
+          // 流式传输中途出错，尝试写入一个 SSE 错误事件后关闭连接
+          try {
+            const errorEvent = `event: error\ndata: ${JSON.stringify({ type: 'error', error: { type: 'server_error', message: 'Internal stream error' } })}\n\n`;
+            res.write(errorEvent);
+            res.end();
+          } catch {
+            // 连接可能已断开，忽略写入错误
+          }
+        }
+
+        // 添加到日志缓冲区（批量写入），记录完整错误信息
         logBuffer.add({
           id: log.id,
           status: 'error',
           statusCode: 500,
-          errorMessage: error instanceof Error ? error.message : 'Unknown error',
+          errorMessage: `[${errName}] ${errMsg}`,
           durationMs,
           targetModel: resolvedTargetModel,
           accountId: resolvedAccountId,
@@ -376,6 +407,20 @@ export class ProxyService {
           );
           continue;
         } else {
+          // 非 ProxyError（网络异常、流中断、转换错误等），记录详细信息后向上抛出
+          logger.error(
+            {
+              errorName: error instanceof Error ? error.name : typeof error,
+              errorMessage: error instanceof Error ? error.message : String(error),
+              errorStack: error instanceof Error ? error.stack : undefined,
+              platform: currentAccount.platform,
+              accountId: currentAccount.id,
+              targetModel: context.targetModel,
+              logId: context.logId,
+              retryCount,
+            },
+            'Non-ProxyError in executeWithRetry, not retryable'
+          );
           throw error;
         }
       }
@@ -674,7 +719,31 @@ export class ProxyService {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       fetchOptions.dispatcher = proxyAgent as any;
     }
-    const response = await fetch(url, fetchOptions);
+
+    let response: globalThis.Response;
+    try {
+      response = await fetch(url, fetchOptions);
+    } catch (fetchError) {
+      // fetch 网络层异常（DNS 解析失败、连接超时、连接拒绝等）
+      const errMsg = fetchError instanceof Error ? fetchError.message : String(fetchError);
+      logger.error(
+        {
+          errorName: fetchError instanceof Error ? fetchError.name : typeof fetchError,
+          errorMessage: errMsg,
+          url,
+          region,
+          kiroModelId,
+          accountId: context.accountId,
+          logId: context.logId,
+        },
+        'Kiro fetch network error'
+      );
+      throw new ProxyError(
+        502,
+        'UPSTREAM_NETWORK_ERROR',
+        `Kiro network error: ${errMsg}`
+      );
+    }
 
     // 收集上游响应头
     const upstreamResponseHeaders: Record<string, string> = {};

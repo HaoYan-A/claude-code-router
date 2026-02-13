@@ -918,6 +918,22 @@ export async function handleKiroSSEStream(
     }
 
     finishReason = allToolCalls.length > 0 ? 'tool_use' : 'end_turn';
+  } catch (streamError) {
+    // 记录流读取/处理过程中的详细错误
+    logger.error(
+      {
+        errorName: streamError instanceof Error ? streamError.name : typeof streamError,
+        errorMessage: streamError instanceof Error ? streamError.message : String(streamError),
+        errorStack: streamError instanceof Error ? streamError.stack : undefined,
+        sessionId: options.sessionId,
+        modelName: options.modelName,
+        chunksReceived: upstreamChunks.length,
+        contentLength: fullContent.length,
+        outputTokensSoFar: outputTokens,
+      },
+      'Kiro SSE stream error during read/process'
+    );
+    throw streamError; // 继续向上抛出
   } finally {
     reader.releaseLock();
     res.end();
