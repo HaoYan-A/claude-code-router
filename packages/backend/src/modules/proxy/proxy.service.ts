@@ -167,6 +167,9 @@ export class ProxyService {
       return;
     }
 
+    // 移除 x-anthropic-billing-header 系统提示元素
+    this.removeBillingHeaderFromSystem(claudeReq);
+
     // 创建日志记录（包含脱敏的客户端请求头）
     const log = await logRepository.create({
       userId,
@@ -1205,6 +1208,33 @@ export class ProxyService {
     );
 
     claudeReq.output_config = { effort };
+  }
+
+  /**
+   * 移除 system prompt 中的 x-anthropic-billing-header 元素
+   * Claude Code 客户端会注入此元素用于 Anthropic 内部计费追踪，转发到第三方平台时应移除
+   */
+  private removeBillingHeaderFromSystem(req: ClaudeRequest): void {
+    if (!req.system) return;
+
+    // string 格式的 system prompt
+    if (typeof req.system === 'string') {
+      if (req.system.trim().startsWith('x-anthropic-billing-header')) {
+        delete req.system;
+      }
+      return;
+    }
+
+    // SystemBlock[] 格式：过滤掉 billing header 元素
+    if (Array.isArray(req.system)) {
+      req.system = req.system.filter(
+        (block) => !(block.type === 'text' && block.text.trim().startsWith('x-anthropic-billing-header'))
+      );
+      // 如果过滤后数组为空，删除 system 字段
+      if (req.system.length === 0) {
+        delete req.system;
+      }
+    }
   }
 
   /**
