@@ -153,8 +153,8 @@ export interface GeminiSearchEntryPoint {
 // ==================== 常量配置 ====================
 
 export const ANTIGRAVITY_ENDPOINTS = [
+  'https://daily-cloudcode-pa.googleapis.com',
   'https://daily-cloudcode-pa.sandbox.googleapis.com',
-  'https://cloudcode-pa.googleapis.com',
 ] as const;
 
 export const STREAM_PATH = '/v1internal:streamGenerateContent?alt=sse';

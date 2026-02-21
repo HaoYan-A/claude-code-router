@@ -21,7 +21,9 @@ import { apiKeyRepository } from '../api-key/api-key.repository.js';
 import { accountsRepository } from '../accounts/accounts.repository.js';
 import { accountSelector } from './account-selector.js';
 import { generateSessionHash, buildSessionKey, setSessionAccount } from './session-affinity.js';
-import { getProxyAgent } from '../../lib/proxy-agent.js';
+import { getUpstreamClient } from '../../lib/upstream-client.js';
+import { buildAntigravityUA, getIdentityHeaders } from '../../lib/request-identity.js';
+import { getAnthropicBetaHeaders } from '../../lib/beta-headers.js';
 // Antigravity channel
 import {
   convertClaudeToGemini,
@@ -57,8 +59,8 @@ import type { SelectedAccount } from './types.js';
 // 最大重试次数
 const MAX_RETRIES = 2;
 
-// User-Agent (版本号需要 >= 1.15.8)
-const USER_AGENT = 'antigravity/1.15.8 darwin/arm64';
+// User-Agent (动态生成)
+const USER_AGENT = buildAntigravityUA();
 
 // Antigravity 端点容量不足重试配置
 const ANTIGRAVITY_MAX_CAPACITY_RETRIES = 3;
@@ -455,7 +457,7 @@ export class ProxyService {
 
     const path = isStream ? STREAM_PATH : NON_STREAM_PATH;
     const upstreamRequestBodyStr = JSON.stringify(geminiBody);
-    const proxyAgent = getProxyAgent();
+    const upstreamClient = getUpstreamClient();
 
     // 端点降级 + 容量不足重试
     attemptLoop:
@@ -464,13 +466,15 @@ export class ProxyService {
         const endpoint = ANTIGRAVITY_ENDPOINTS[epIdx];
         const url = `${endpoint}${path}`;
 
-        // 构建上游请求头（Host 动态解析）
+        // 构建上游请求头（Host 动态解析 + 身份注入）
         const upstreamHeaders: Record<string, string> = {
           Host: new URL(endpoint).hostname,
           'User-Agent': USER_AGENT,
           'Content-Type': 'application/json',
           Authorization: `Bearer ${context.accessToken}`,
           Accept: isStream ? 'text/event-stream' : 'application/json',
+          ...getIdentityHeaders(),
+          ...getAnthropicBetaHeaders(context.targetModel, context.userAgent),
         };
 
         const upstreamRequestHeadersStr = JSON.stringify(upstreamHeaders);
@@ -497,23 +501,16 @@ export class ProxyService {
           'Sending request to Antigravity'
         );
 
-        // 发送请求
-        const fetchOptions: RequestInit & { dispatcher?: unknown } = {
+        // 发送请求 (流式使用原生 fetch，非流式使用 TLS 客户端)
+        const response = await upstreamClient.fetch(url, {
           method: 'POST',
           headers: upstreamHeaders,
           body: upstreamRequestBodyStr,
-        };
-        if (proxyAgent) {
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          fetchOptions.dispatcher = proxyAgent as any;
-        }
-        const response = await fetch(url, fetchOptions);
-
-        // 收集上游响应头
-        const upstreamResponseHeaders: Record<string, string> = {};
-        response.headers.forEach((value, key) => {
-          upstreamResponseHeaders[key] = value;
+          stream: isStream,
         });
+
+        // 上游响应头已由 UpstreamClient 收集
+        const upstreamResponseHeaders = response.headers;
 
         // 处理错误响应
         if (!response.ok) {
@@ -711,21 +708,17 @@ export class ProxyService {
       'Sending request to Kiro'
     );
 
-    // 发送请求
-    const proxyAgent = getProxyAgent();
-    const fetchOptions: RequestInit & { dispatcher?: unknown } = {
-      method: 'POST',
-      headers: upstreamHeaders,
-      body: upstreamRequestBodyStr,
-    };
-    if (proxyAgent) {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      fetchOptions.dispatcher = proxyAgent as any;
-    }
+    // 发送请求 (流式使用原生 fetch，非流式使用 TLS 客户端)
+    const upstreamClient = getUpstreamClient();
 
-    let response: globalThis.Response;
+    let response;
     try {
-      response = await fetch(url, fetchOptions);
+      response = await upstreamClient.fetch(url, {
+        method: 'POST',
+        headers: upstreamHeaders,
+        body: upstreamRequestBodyStr,
+        stream: isStream,
+      });
     } catch (fetchError) {
       // fetch 网络层异常（DNS 解析失败、连接超时、连接拒绝等）
       const errMsg = fetchError instanceof Error ? fetchError.message : String(fetchError);
@@ -748,11 +741,8 @@ export class ProxyService {
       );
     }
 
-    // 收集上游响应头
-    const upstreamResponseHeaders: Record<string, string> = {};
-    response.headers.forEach((value, key) => {
-      upstreamResponseHeaders[key] = value;
-    });
+    // 上游响应头已由 UpstreamClient 收集
+    const upstreamResponseHeaders = response.headers;
 
     // 处理错误响应
     if (!response.ok) {
@@ -946,24 +936,17 @@ export class ProxyService {
       'Sending request to OpenAI Responses API'
     );
 
-    // 发送请求
-    const proxyAgent = getProxyAgent();
-    const fetchOptions: RequestInit & { dispatcher?: unknown } = {
+    // 发送请求 (流式使用原生 fetch，非流式使用 TLS 客户端)
+    const upstreamClient = getUpstreamClient();
+    const response = await upstreamClient.fetch(url, {
       method: 'POST',
       headers: upstreamHeaders,
       body: upstreamRequestBodyStr,
-    };
-    if (proxyAgent) {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      fetchOptions.dispatcher = proxyAgent as any;
-    }
-    const response = await fetch(url, fetchOptions);
-
-    // 收集上游响应头
-    const upstreamResponseHeaders: Record<string, string> = {};
-    response.headers.forEach((value, key) => {
-      upstreamResponseHeaders[key] = value;
+      stream: isStream,
     });
+
+    // 上游响应头已由 UpstreamClient 收集
+    const upstreamResponseHeaders = response.headers;
 
     // Codex: 提取并保存用量信息（从响应头）
     if (isCodex && response.ok) {

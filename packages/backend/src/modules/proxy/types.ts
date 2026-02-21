@@ -29,6 +29,7 @@ export interface OutputConfig {
 export interface ThinkingConfig {
   type: 'enabled' | 'disabled' | 'adaptive';
   budget_tokens?: number;
+  effort?: EffortLevel;
 }
 
 export type SystemPrompt = string | SystemBlock[];
@@ -264,7 +265,7 @@ export interface SelectedAccount {
 
 /**
  * 解析请求中的 effort 等级
- * 优先级: output_config.effort > budget_tokens 映射 > 默认 'high'
+ * 优先级: output_config.effort > thinking.effort > budget_tokens 映射 > 默认 'high'
  */
 export function resolveEffort(req: ClaudeRequest): EffortLevel {
   // 1. 优先使用 output_config.effort
@@ -272,7 +273,12 @@ export function resolveEffort(req: ClaudeRequest): EffortLevel {
     return req.output_config.effort;
   }
 
-  // 2. 从 budget_tokens 映射
+  // 2. 使用 thinking.effort（Claude 原生格式）
+  if (req.thinking?.effort) {
+    return req.thinking.effort;
+  }
+
+  // 3. 从 budget_tokens 映射
   const budget = req.thinking?.budget_tokens;
   if (budget !== undefined) {
     if (budget <= 1024) return 'low';

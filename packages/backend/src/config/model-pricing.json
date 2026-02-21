@@ -18,8 +18,15 @@
       "cacheRead": 0.50,
       "cacheWrite": 6.25
     },
+    "claude-sonnet-4-6-thinking": {
+      "description": "Antigravity 平台 - Claude Sonnet 4.6",
+      "input": 3.30,
+      "output": 16.50,
+      "cacheRead": 0.33,
+      "cacheWrite": 4.125
+    },
     "claude-sonnet-4-5-thinking": {
-      "description": "Antigravity 平台 - Claude Sonnet 4.5",
+      "description": "Antigravity 平台 - Claude Sonnet 4.5（已弃用）",
       "input": 3.30,
       "output": 16.50,
       "cacheRead": 0.33,

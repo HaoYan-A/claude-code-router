@@ -2,7 +2,7 @@ import crypto from 'crypto';
 import { logger } from '../../../lib/logger.js';
 import { AppError } from '../../../middlewares/error.middleware.js';
 import { ErrorCodes } from '@claude-code-router/shared';
-import { getProxyAgent, isProxyEnabled } from '../../../lib/proxy-agent.js';
+import { getUpstreamClient } from '../../../lib/upstream-client.js';
 
 // Google OAuth 配置（硬编码，与 Antigravity 客户端一致）
 const ANTIGRAVITY_CLIENT_ID = '1071006060591-tmhssin2h21lcre235vtolojh4g403ep.apps.googleusercontent.com';
@@ -27,7 +27,9 @@ const ANTIGRAVITY_SCOPES = [
   'https://www.googleapis.com/auth/experimentsandconfigs',
 ];
 
-const USER_AGENT = 'antigravity/1.15.8 Darwin/arm64';
+import { buildAntigravityUA } from '../../../lib/request-identity.js';
+
+const USER_AGENT = buildAntigravityUA();
 
 export interface AntigravityTokenResponse {
   access_token: string;
@@ -88,24 +90,25 @@ function decodeState(state: string): OAuthStateData {
   }
 }
 
-async function fetchWithProxy(url: string, options: RequestInit = {}): Promise<Response> {
-  const proxyAgent = getProxyAgent();
-  const fetchOptions: RequestInit & { dispatcher?: unknown } = {
-    ...options,
-    headers: {
-      'User-Agent': USER_AGENT,
-      ...options.headers,
-    },
+async function fetchWithProxy(url: string, options: RequestInit = {}): Promise<{ ok: boolean; status: number; text: () => Promise<string>; json: () => Promise<unknown> }> {
+  const upstreamClient = getUpstreamClient();
+  const headers: Record<string, string> = {
+    'User-Agent': USER_AGENT,
   };
 
-  // 如果启用了代理，添加 dispatcher
-  if (proxyAgent) {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    fetchOptions.dispatcher = proxyAgent as any;
-    logger.debug({ url, proxy: isProxyEnabled() }, 'Fetching with proxy');
+  // 合并传入的 headers
+  if (options.headers) {
+    const inHeaders = options.headers as Record<string, string>;
+    Object.assign(headers, inHeaders);
   }
 
-  return fetch(url, fetchOptions);
+  const response = await upstreamClient.fetch(url, {
+    method: options.method || 'GET',
+    headers,
+    body: typeof options.body === 'string' ? options.body : options.body?.toString(),
+  });
+
+  return response;
 }
 
 export class AntigravityService {

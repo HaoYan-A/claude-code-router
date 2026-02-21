@@ -149,7 +149,7 @@ export async function convertClaudeToGemini(
     project: projectId,
     requestId: `agent-${uuidv4()}`,
     request: innerRequest,
-    model: targetModel,
+    model: resolveAntigravityModelName(targetModel),
     userAgent: 'antigravity',
     requestType: REQUEST_TYPE,
   };
@@ -278,8 +278,8 @@ function detectThinkingEnabled(req: ClaudeRequest, targetModel: string): boolean
     return false;
   }
 
-  // 仅有 output_config.effort 也算启用
-  if (req.output_config?.effort) {
+  // 仅有 output_config.effort 或 thinking.effort 也算启用
+  if (req.output_config?.effort || req.thinking?.effort) {
     if (!targetModelSupportsThinking(targetModel)) {
       logger.warn(
         `[Thinking-Mode] Target model '${targetModel}' does not support thinking, disabling`
@@ -293,6 +293,11 @@ function detectThinkingEnabled(req: ClaudeRequest, targetModel: string): boolean
   const model = req.model.toLowerCase();
   if (model.includes('opus')) {
     return targetModelSupportsThinking(targetModel);
+  }
+
+  // 目标模型名含 -thinking（如 claude-sonnet-4-6-thinking），Antigravity 要求必须携带 thinkingConfig
+  if (targetModel.toLowerCase().includes('-thinking')) {
+    return true;
   }
 
   return false;
@@ -807,6 +812,7 @@ function buildGenerationConfig(
       };
     } else {
       config.thinkingConfig = {
+        includeThoughts: true,
         thinkingBudget: resolveBudgetTokens(req),
       };
     }
@@ -828,6 +834,19 @@ function normalizeContent(content: MessageContent): ContentBlock[] {
 }
 
 // ==================== 模型 Slot 提取 ====================
+
+/**
+ * 将我们的内部模型名规范化为 Antigravity 实际接受的模型名。
+ * Antigravity 对 Sonnet/Haiku 等 Claude 模型只暴露不带 -thinking 的版本，
+ * thinking 通过 thinkingConfig 控制；Opus 例外，它只有 -thinking 变体。
+ */
+function resolveAntigravityModelName(targetModel: string): string {
+  const lower = targetModel.toLowerCase();
+  if (lower.includes('claude') && lower.endsWith('-thinking') && !lower.includes('opus')) {
+    return targetModel.slice(0, -'-thinking'.length);
+  }
+  return targetModel;
+}
 
 /**
  * 从模型名称提取 slot (opus/sonnet/haiku)

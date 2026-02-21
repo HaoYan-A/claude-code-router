@@ -8,7 +8,7 @@ export const PLATFORMS = {
     models: [
       { id: 'claude-opus-4-6-thinking', name: 'Claude Opus 4.6 Thinking' },
       { id: 'claude-opus-4-5-thinking', name: 'Claude Opus 4.5 Thinking' },
-      { id: 'claude-sonnet-4-5-thinking', name: 'Claude Sonnet 4.5 Thinking' },
+      { id: 'claude-sonnet-4-6-thinking', name: 'Claude Sonnet 4.6 Thinking' },
       { id: 'gemini-3-pro-high', name: 'Gemini 3 Pro' },
       { id: 'gemini-3-flash', name: 'Gemini 3 Flash' },
     ],
@@ -44,7 +44,7 @@ export const DEFAULT_MODEL_MAPPINGS: Record<
   { platform: PlatformId; model: string }
 > = {
   opus: { platform: 'antigravity', model: 'claude-opus-4-6-thinking' },
-  sonnet: { platform: 'antigravity', model: 'claude-sonnet-4-5-thinking' },
+  sonnet: { platform: 'antigravity', model: 'claude-sonnet-4-6-thinking' },
   haiku: { platform: 'antigravity', model: 'gemini-3-flash' },
 };
 

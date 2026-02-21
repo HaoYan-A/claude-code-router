@@ -33,6 +33,14 @@ const envSchema = z.object({
     .transform((v) => v === 'true')
     .default('false'),
   THIRD_PARTY_PROXY_URL: z.string().optional(),
+
+  // TLS Fingerprint
+  TLS_FINGERPRINT_ENABLED: z
+    .string()
+    .transform((v) => v === 'true')
+    .default('true'),
+  TLS_FINGERPRINT_PROFILE: z.string().default('chrome_131'),
+  CUSTOM_USER_AGENT: z.string().optional(),
 });
 
 const parsed = envSchema.safeParse(process.env);

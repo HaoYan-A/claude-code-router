@@ -4,7 +4,7 @@ import { connectDatabase, disconnectDatabase } from './lib/prisma.js';
 import { connectRedis, disconnectRedis } from './lib/redis.js';
 import { createApp } from './app.js';
 import { startScheduler, stopScheduler } from './lib/scheduler.js';
-import { isProxyEnabled, getProxyUrl } from './lib/proxy-agent.js';
+import { initUpstreamClient, getUpstreamClient } from './lib/upstream-client.js';
 
 async function main() {
   try {
@@ -16,6 +16,15 @@ async function main() {
     await connectRedis();
     logger.info('Redis connected');
 
+    // Initialize upstream client with TLS fingerprint
+    const proxyUrl = env.THIRD_PARTY_PROXY_ENABLED ? env.THIRD_PARTY_PROXY_URL : undefined;
+    initUpstreamClient({
+      proxyUrl,
+      tlsEnabled: env.TLS_FINGERPRINT_ENABLED,
+      tlsProfile: env.TLS_FINGERPRINT_PROFILE,
+      customUserAgent: env.CUSTOM_USER_AGENT,
+    });
+
     // Create and start Express app
     const app = createApp();
 
@@ -23,11 +32,17 @@ async function main() {
       logger.info(`Server running on port ${env.PORT}`);
       logger.info(`API docs available at http://localhost:${env.PORT}/api/docs`);
 
-      // 显示代理状态
-      if (isProxyEnabled()) {
-        logger.info({ proxyUrl: getProxyUrl() }, '✓ Third-party proxy ENABLED');
+      // 显示代理和 TLS 状态
+      if (env.THIRD_PARTY_PROXY_ENABLED && proxyUrl) {
+        logger.info({ proxyUrl }, '✓ Third-party proxy ENABLED');
       } else {
         logger.info('✗ Third-party proxy disabled');
+      }
+
+      if (env.TLS_FINGERPRINT_ENABLED) {
+        logger.info({ profile: env.TLS_FINGERPRINT_PROFILE }, '✓ TLS fingerprint ENABLED');
+      } else {
+        logger.info('✗ TLS fingerprint disabled');
       }
 
       startScheduler();
@@ -41,6 +56,10 @@ async function main() {
 
       server.close(async () => {
         logger.info('HTTP server closed');
+
+        // Destroy upstream TLS client
+        await getUpstreamClient().destroy();
+        logger.info('Upstream client destroyed');
 
         await disconnectDatabase();
         logger.info('Database disconnected');

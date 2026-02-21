@@ -38,7 +38,7 @@ const PRESETS: Preset[] = [
     label: 'AG Claude',
     mappings: [
       { claudeModel: 'opus', platform: 'antigravity', targetModel: 'claude-opus-4-6-thinking' },
-      { claudeModel: 'sonnet', platform: 'antigravity', targetModel: 'claude-sonnet-4-5-thinking' },
+      { claudeModel: 'sonnet', platform: 'antigravity', targetModel: 'claude-sonnet-4-6-thinking' },
       { claudeModel: 'haiku', platform: 'antigravity', targetModel: 'gemini-3-flash' },
     ],
   },

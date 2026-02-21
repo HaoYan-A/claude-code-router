@@ -16,8 +16,8 @@ describe('cost-calculator', () => {
       expect(pricing?.cacheWrite).toBe(6.25);
     });
 
-    it('should return pricing for claude-sonnet-4-5-thinking', () => {
-      const pricing = getModelPricing('claude-sonnet-4-5-thinking');
+    it('should return pricing for claude-sonnet-4-6-thinking', () => {
+      const pricing = getModelPricing('claude-sonnet-4-6-thinking');
       expect(pricing).not.toBeNull();
       expect(pricing?.input).toBe(3.3);
       expect(pricing?.output).toBe(16.5);
@@ -176,7 +176,7 @@ describe('cost-calculator', () => {
       const models = getAllModelNames();
 
       expect(models).toContain('claude-opus-4-5-thinking');
-      expect(models).toContain('claude-sonnet-4-5-thinking');
+      expect(models).toContain('claude-sonnet-4-6-thinking');
       expect(models).toContain('gemini-3-flash');
       expect(models).toContain('gemini-3-pro-high');
       expect(models).toContain('claude-opus-4.5');
