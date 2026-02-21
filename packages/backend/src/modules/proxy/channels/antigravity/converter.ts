@@ -839,12 +839,16 @@ function normalizeContent(content: MessageContent): ContentBlock[] {
  * 将我们的内部模型名规范化为 Antigravity 实际接受的模型名。
  * Antigravity 对 Sonnet/Haiku 等 Claude 模型只暴露不带 -thinking 的版本，
  * thinking 通过 thinkingConfig 控制；Opus 例外，它只有 -thinking 变体。
+ * Gemini Pro 的 "preview" 是内部逻辑别名，上游 v1internal API 只接受 "high" 物理模型名。
  */
 function resolveAntigravityModelName(targetModel: string): string {
   const lower = targetModel.toLowerCase();
   if (lower.includes('claude') && lower.endsWith('-thinking') && !lower.includes('opus')) {
     return targetModel.slice(0, -'-thinking'.length);
   }
+  // Gemini Pro preview → high（与 Antigravity Manager common_utils.rs 一致）
+  if (lower === 'gemini-3.1-pro-preview') return 'gemini-3.1-pro-high';
+  if (lower === 'gemini-3-pro-preview') return 'gemini-3.1-pro-high';
   return targetModel;
 }
 

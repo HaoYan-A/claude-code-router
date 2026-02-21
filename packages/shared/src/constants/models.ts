@@ -9,7 +9,7 @@ export const PLATFORMS = {
       { id: 'claude-opus-4-6-thinking', name: 'Claude Opus 4.6 Thinking' },
       { id: 'claude-opus-4-5-thinking', name: 'Claude Opus 4.5 Thinking' },
       { id: 'claude-sonnet-4-6-thinking', name: 'Claude Sonnet 4.6 Thinking' },
-      { id: 'gemini-3-pro-high', name: 'Gemini 3 Pro' },
+      { id: 'gemini-3.1-pro-preview', name: 'Gemini 3.1 Pro' },
       { id: 'gemini-3-flash', name: 'Gemini 3 Flash' },
     ],
   },

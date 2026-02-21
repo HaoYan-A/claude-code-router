@@ -178,7 +178,7 @@ describe('cost-calculator', () => {
       expect(models).toContain('claude-opus-4-5-thinking');
       expect(models).toContain('claude-sonnet-4-6-thinking');
       expect(models).toContain('gemini-3-flash');
-      expect(models).toContain('gemini-3-pro-high');
+      expect(models).toContain('gemini-3.1-pro-preview');
       expect(models).toContain('claude-opus-4.5');
       expect(models).toContain('claude-sonnet-4.5');
       expect(models).toContain('claude-haiku-4.5');

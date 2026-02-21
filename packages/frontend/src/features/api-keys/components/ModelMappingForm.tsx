@@ -45,8 +45,8 @@ const PRESETS: Preset[] = [
   {
     label: 'AG Gemini',
     mappings: [
-      { claudeModel: 'opus', platform: 'antigravity', targetModel: 'gemini-3-pro-high' },
-      { claudeModel: 'sonnet', platform: 'antigravity', targetModel: 'gemini-3-pro-high' },
+      { claudeModel: 'opus', platform: 'antigravity', targetModel: 'gemini-3.1-pro-preview' },
+      { claudeModel: 'sonnet', platform: 'antigravity', targetModel: 'gemini-3.1-pro-preview' },
       { claudeModel: 'haiku', platform: 'antigravity', targetModel: 'gemini-3-flash' },
     ],
   },

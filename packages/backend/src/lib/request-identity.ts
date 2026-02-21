@@ -12,8 +12,9 @@ import * as os from 'os';
 import * as crypto from 'crypto';
 
 // 已知稳定版本号（兜底值）
+// 从 https://antigravity-auto-updater-*.run.app 获取最新稳定版
 const KNOWN_STABLE = {
-  version: '1.16.5',
+  version: '1.18.4',
   electron: '39.2.3',
   chrome: '132.0.6834.160',
   nodeVersion: '22.11.0',
