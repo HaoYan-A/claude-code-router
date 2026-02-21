@@ -61,7 +61,14 @@
       "cacheWrite": 6.25
     },
     "claude-sonnet-4.5": {
-      "description": "Kiro 平台 - Claude Sonnet 4.5（与官方定价一致）",
+      "description": "Kiro 平台 - Claude Sonnet 4.5 (已淘汰，请使用 4.6)",
+      "input": 3.30,
+      "output": 16.50,
+      "cacheRead": 0.33,
+      "cacheWrite": 4.125
+    },
+    "claude-sonnet-4.6": {
+      "description": "Kiro 平台 - Claude Sonnet 4.6",
       "input": 3.30,
       "output": 16.50,
       "cacheRead": 0.33,

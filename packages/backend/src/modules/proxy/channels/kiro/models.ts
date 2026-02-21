@@ -162,7 +162,7 @@ export const KIRO_MODELS_PATH = '/ListAvailableModels?origin=AI_EDITOR';
  * Kiro 支持的模型 ID（从 ListAvailableModels API 获取）：
  * - auto
  * - claude-sonnet-4
- * - claude-sonnet-4.5
+ * - claude-sonnet-4.6
  * - claude-haiku-4.5
  * - claude-opus-4.5
  * - claude-opus-4.6
@@ -172,9 +172,9 @@ export const CLAUDE_TO_KIRO_MODEL_MAP: Record<string, string> = {
   'claude-sonnet-4-20250514': 'claude-sonnet-4',
   'claude-sonnet-4': 'claude-sonnet-4',
 
-  // Claude Sonnet 4.5
-  'claude-sonnet-4-5': 'claude-sonnet-4.5',
-  'claude-sonnet-4.5': 'claude-sonnet-4.5',
+  // Claude Sonnet 4.6
+  'claude-sonnet-4-6': 'claude-sonnet-4.6',
+  'claude-sonnet-4.6': 'claude-sonnet-4.6',
 
   // Claude Opus 4.6
   'claude-opus-4-6': 'claude-opus-4.6',

@@ -54,7 +54,7 @@ const PRESETS: Preset[] = [
     label: 'Kiro Claude',
     mappings: [
       { claudeModel: 'opus', platform: 'kiro', targetModel: 'claude-opus-4.6' },
-      { claudeModel: 'sonnet', platform: 'kiro', targetModel: 'claude-sonnet-4.5' },
+      { claudeModel: 'sonnet', platform: 'kiro', targetModel: 'claude-sonnet-4.6' },
       { claudeModel: 'haiku', platform: 'kiro', targetModel: 'claude-haiku-4.5' },
     ],
   },

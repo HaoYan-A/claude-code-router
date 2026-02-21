@@ -147,15 +147,15 @@ function mapModelId(claudeModel: string): string {
     return CLAUDE_TO_KIRO_MODEL_MAP[normalizedModel];
   }
 
-  // 模糊匹配
+  // 模糊匹配 - Check from most specific to most general to avoid substring collisions
   if (normalizedModel.includes('opus-4.6') || normalizedModel.includes('opus-4-6')) {
     return 'claude-opus-4.6';
   }
   if (normalizedModel.includes('opus-4.5') || normalizedModel.includes('opus-4-5') || normalizedModel.includes('opus')) {
     return 'claude-opus-4.5';
   }
-  if (normalizedModel.includes('sonnet-4.5') || normalizedModel.includes('sonnet-4-5')) {
-    return 'claude-sonnet-4.5';
+  if (normalizedModel.includes('sonnet-4.6') || normalizedModel.includes('sonnet-4-6')) {
+    return 'claude-sonnet-4.6';
   }
   if (normalizedModel.includes('sonnet-4') || normalizedModel.includes('sonnet')) {
     return 'claude-sonnet-4';
