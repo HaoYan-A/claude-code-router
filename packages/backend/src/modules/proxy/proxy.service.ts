@@ -22,7 +22,7 @@ import { accountsRepository } from '../accounts/accounts.repository.js';
 import { accountSelector } from './account-selector.js';
 import { generateSessionHash, buildSessionKey, setSessionAccount } from './session-affinity.js';
 import { getUpstreamClient } from '../../lib/upstream-client.js';
-import { buildAntigravityUA, getIdentityHeaders } from '../../lib/request-identity.js';
+import { buildAntigravityUA } from '../../lib/request-identity.js';
 import { getAnthropicBetaHeaders } from '../../lib/beta-headers.js';
 // Antigravity channel
 import {
@@ -38,6 +38,10 @@ import {
   STREAM_PATH,
   NON_STREAM_PATH,
 } from './channels/antigravity/models.js';
+import {
+  reportMetrics,
+  reportTrajectory,
+} from './channels/antigravity/telemetry.js';
 // Kiro channel
 import {
   convertClaudeToKiro,
@@ -234,6 +238,7 @@ export class ProxyService {
         projectId: account.projectId,
         sessionId: this.extractSessionId(claudeReq),
         messageCount: claudeReq.messages.length,
+        trajectoryId: uuidv4(),
         logId: log.id,
         startTime,
       };
@@ -445,6 +450,8 @@ export class ProxyService {
     const isStream = claudeReq.stream === true;
 
     // 转换请求
+    // stepIndex 模拟真实 Antigravity 的 Step Id 递增规律：每轮对话约 +3（user_input + ephemeral + planner_response）
+    const stepIndex = claudeReq.messages.length * 3;
     const { body: geminiBody, isThinkingEnabled, messageCount } = await convertClaudeToGemini(
       claudeReq,
       context.targetModel,
@@ -452,6 +459,8 @@ export class ProxyService {
         projectId: context.projectId,
         sessionId: context.sessionId,
         isRetry,
+        trajectoryId: context.trajectoryId,
+        stepIndex,
       }
     );
 
@@ -473,7 +482,6 @@ export class ProxyService {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${context.accessToken}`,
           Accept: isStream ? 'text/event-stream' : 'application/json',
-          ...getIdentityHeaders(),
           ...getAnthropicBetaHeaders(context.targetModel, context.userAgent),
         };
 
@@ -605,6 +613,36 @@ export class ProxyService {
             result.outputTokens,
             result.cacheReadTokens || 0
           ).catch((err) => logger.error({ err, accountId: context.accountId }, 'Failed to update account stats'));
+
+          // 遥测上报 (fire-and-forget)
+          reportMetrics({
+            endpoint,
+            accessToken: context.accessToken,
+            projectId: context.projectId,
+            traceId: result.traceId || '',
+            firstMessageLatencyMs: result.firstMessageLatencyMs || durationMs,
+            totalLatencyMs: result.totalLatencyMs || durationMs,
+            trajectoryId: context.trajectoryId,
+          }).catch(err => logger.debug({ err }, 'Telemetry metrics report failed'));
+
+          reportTrajectory({
+            endpoint,
+            accessToken: context.accessToken,
+            projectId: context.projectId,
+            trajectoryId: context.trajectoryId,
+            geminiBody,
+            responseId: result.responseId || '',
+            traceId: result.traceId || '',
+            usage: {
+              promptTokenCount: result.rawInputTokens,
+              candidatesTokenCount: result.rawOutputTokens,
+              cachedContentTokenCount: result.rawCacheTokens,
+            },
+            modelName: context.targetModel,
+            totalLatencyMs: result.totalLatencyMs || durationMs,
+            stepIndex,
+            messageCount,
+          }).catch(err => logger.debug({ err }, 'Telemetry trajectory report failed'));
         } else {
           const geminiResponseText = await response.text();
           const geminiResponse = JSON.parse(geminiResponseText);
@@ -652,6 +690,40 @@ export class ProxyService {
             claudeResponse.usage.output_tokens,
             claudeResponse.usage.cache_read_input_tokens || 0
           ).catch((err) => logger.error({ err, accountId: context.accountId }, 'Failed to update account stats'));
+
+          // 非流式遥测上报 (fire-and-forget)
+          // 从非流式响应中提取 traceId 和 responseId
+          const nonStreamTraceId = geminiResponse.traceId || '';
+          const nonStreamResponseId = geminiResponse.responseId || '';
+
+          reportMetrics({
+            endpoint,
+            accessToken: context.accessToken,
+            projectId: context.projectId,
+            traceId: nonStreamTraceId,
+            firstMessageLatencyMs: durationMs,
+            totalLatencyMs: durationMs,
+            trajectoryId: context.trajectoryId,
+          }).catch(err => logger.debug({ err }, 'Telemetry metrics report failed'));
+
+          reportTrajectory({
+            endpoint,
+            accessToken: context.accessToken,
+            projectId: context.projectId,
+            trajectoryId: context.trajectoryId,
+            geminiBody,
+            responseId: nonStreamResponseId,
+            traceId: nonStreamTraceId,
+            usage: {
+              promptTokenCount: rawInputTokens,
+              candidatesTokenCount: rawOutputTokens,
+              cachedContentTokenCount: rawCacheTokens,
+            },
+            modelName: context.targetModel,
+            totalLatencyMs: durationMs,
+            stepIndex,
+            messageCount,
+          }).catch(err => logger.debug({ err }, 'Telemetry trajectory report failed'));
         }
 
         return; // 成功处理完毕

@@ -9,7 +9,6 @@
  * 5. Thinking 模式：智能检测与降级
  */
 
-import { v4 as uuidv4 } from 'uuid';
 import type {
   ClaudeRequest,
   Message,
@@ -44,6 +43,8 @@ export interface ConvertOptions {
   projectId: string;
   sessionId: string;
   isRetry?: boolean;
+  trajectoryId: string;
+  stepIndex: number;
 }
 
 export interface ConvertResult {
@@ -60,7 +61,7 @@ export async function convertClaudeToGemini(
   targetModel: string,
   options: ConvertOptions
 ): Promise<ConvertResult> {
-  const { projectId, sessionId, isRetry = false } = options;
+  const { projectId, sessionId, isRetry = false, trajectoryId, stepIndex } = options;
 
   // 克隆请求以避免修改原始数据
   const req = JSON.parse(JSON.stringify(claudeReq)) as ClaudeRequest;
@@ -140,14 +141,13 @@ export async function convertClaudeToGemini(
     };
   }
 
-  // 添加 sessionId
-  if (req.metadata?.user_id) {
-    innerRequest.sessionId = req.metadata.user_id;
-  }
+  // 添加 sessionId（转为数值型 hash，匹配真实 Antigravity 客户端格式）
+  const rawSessionId = req.metadata?.user_id || sessionId;
+  innerRequest.sessionId = stringToNumericHash(rawSessionId);
 
   const body: GeminiRequest = {
     project: projectId,
-    requestId: `agent-${uuidv4()}`,
+    requestId: `agent/${Date.now()}/${trajectoryId}/${stepIndex}`,
     request: innerRequest,
     model: resolveAntigravityModelName(targetModel),
     userAgent: 'antigravity',
@@ -860,4 +860,20 @@ export function extractModelSlot(model: string): ModelSlot {
   if (lower.includes('opus')) return 'opus';
   if (lower.includes('haiku')) return 'haiku';
   return 'sonnet'; // 默认
+}
+
+/**
+ * 将字符串转换为数值型 hash 字符串
+ * 模拟真实 Antigravity 客户端的 sessionId 格式（类似 Java Long hash）
+ * 例: "some-uuid" → "-3750763034362895579"
+ */
+function stringToNumericHash(str: string): string {
+  let hash = BigInt(0);
+  const prime = BigInt(31);
+  for (let i = 0; i < str.length; i++) {
+    hash = hash * prime + BigInt(str.charCodeAt(i));
+    // 保持在 64-bit signed 范围内（模拟 Java Long 溢出行为）
+    hash = BigInt.asIntN(64, hash);
+  }
+  return hash.toString();
 }

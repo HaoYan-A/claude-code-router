@@ -867,6 +867,11 @@ export interface SSEStreamResult {
   rawCacheTokens: number;
   upstreamResponseBody: string;
   clientResponseBody: string;
+  // 遥测数据
+  traceId?: string;
+  responseId?: string;
+  firstMessageLatencyMs?: number;
+  totalLatencyMs?: number;
 }
 
 // Keep-Alive 心跳间隔（15 秒）
@@ -894,6 +899,12 @@ export async function handleSSEStream(
   let rawInputTokens = 0;
   let rawOutputTokens = 0;
   let rawCacheTokens = 0;
+
+  // 遥测数据
+  let traceId: string | undefined;
+  let responseId: string | undefined;
+  const streamStartTime = Date.now();
+  let firstChunkTime: number | undefined;
 
   // 收集上游原始响应
   const upstreamChunks: string[] = [];
@@ -945,6 +956,11 @@ export async function handleSSEStream(
           const rawParsed = JSON.parse(data);
           // Antigravity 响应嵌套在 response 字段中
           const parsed = (rawParsed.response || rawParsed) as GeminiResponse;
+
+          // 捕获遥测数据
+          if (rawParsed.traceId) traceId = rawParsed.traceId;
+          if (parsed.responseId) responseId = parsed.responseId;
+          if (firstChunkTime === undefined) firstChunkTime = Date.now();
 
           // 发送 message_start
           if (!state['messageStartSent']) {
@@ -1005,6 +1021,11 @@ export async function handleSSEStream(
     res.end();
   }
 
+  const totalLatencyMs = Date.now() - streamStartTime;
+  const firstMessageLatencyMs = firstChunkTime !== undefined
+    ? firstChunkTime - streamStartTime
+    : totalLatencyMs;
+
   return {
     inputTokens,
     outputTokens,
@@ -1015,5 +1036,9 @@ export async function handleSSEStream(
     rawCacheTokens,
     upstreamResponseBody: upstreamChunks.join('\n'),
     clientResponseBody: clientChunks.join(''),
+    traceId,
+    responseId,
+    firstMessageLatencyMs,
+    totalLatencyMs,
   };
 }

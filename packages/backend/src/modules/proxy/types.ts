@@ -236,6 +236,8 @@ export interface ProxyContext {
   // Session 相关
   sessionId: string;
   messageCount: number;
+  // 遥测相关
+  trajectoryId: string;
   // 日志相关
   logId: string;
   startTime: number;
