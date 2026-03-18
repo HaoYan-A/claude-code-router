@@ -12,6 +12,7 @@
  * 8. 记录日志
  */
 
+import * as crypto from 'crypto';
 import type { Response } from 'express';
 import { v4 as uuidv4 } from 'uuid';
 import { logger } from '../../lib/logger.js';
@@ -1296,13 +1297,19 @@ export class ProxyService {
    * 从请求中提取 session ID
    */
   private extractSessionId(req: ClaudeRequest): string {
-    // 优先使用 metadata.user_id
-    if (req.metadata?.user_id) {
-      return req.metadata.user_id;
+    const userId = req.metadata?.user_id;
+    if (!userId) return `session-${uuidv4()}`;
+
+    // 防御：某些客户端传 JSON 对象作为 user_id，Kiro API 不接受非字符串 conversationId
+    if (userId.startsWith('{')) {
+      try {
+        const parsed = JSON.parse(userId);
+        if (parsed.session_id) return parsed.session_id;
+      } catch { /* ignore */ }
+      return crypto.createHash('sha256').update(userId).digest('hex').substring(0, 36);
     }
 
-    // 否则生成新的
-    return `session-${uuidv4()}`;
+    return userId;
   }
 
   private estimateInputTokens(req: ClaudeRequest): number {
